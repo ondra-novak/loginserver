@@ -1,0 +1,970 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html><head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+<link rel="shortcut icon" type="image/png" href="favicon.png"/>
+<style>
+body {
+margin:0;
+padding:0;
+font-family: sans-serif;
+}
+.inputbox {
+border: 1px solid black;
+border-radius: 6px;
+padding: 10px;
+background-color: #CCC;
+display:table;
+width: 100%;
+ box-sizing: border-box;
+  -moz-box-sizing: border-box;
+  -webkit-box-sizing: border-box;
+  position: relative;
+}
+.inputbox .label, .inputbox .cmdline,.inputbox .control {
+display: table-cell;
+vertical-align: top;
+}
+
+.inputbox .cmdline textarea {
+width:100%;
+ box-sizing: border-box;
+  -moz-box-sizing: border-box;
+  -webkit-box-sizing: border-box;
+}
+
+.inputbox .label {
+width: 5em;
+}
+
+.inputbox .label div{
+margin-top: 1em;
+}
+
+.inputbox .control {
+width: 7em;
+vertical-align: top;
+text-align: center;
+}
+#submit {
+width: 6em;
+height: 2em;
+margin-top: 10px;
+}
+
+
+.cmdlist {
+position:absolute;
+left:10px;
+top:10px;
+width: 300px;
+border: 1px solid;
+background-color: white;
+padding: 5px;
+min-height: 2em;
+max-height: 50vh;
+padding-top: 15px;
+display:none;
+z-index: 1000;
+
+}
+
+.closebutt {
+position: absolute;
+width: 16px;
+height: 16px;
+right: 1px;
+top: 1px;
+text-align: center;
+display:block;
+cursor: pointer;
+background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQBAMAAADt3eJSAAAAG1BMVEUhAAATExMUFBQbGxscHBwdHR0jIyMkJCQyMjK3SidCAAAAAXRSTlMAQObYZgAAAF5JREFUCNdNjbESQEAQQ8McWp/gM5RXXqlUKpVKvUM+WzJnhjS7k7fJAp8GoPZsM5A2LStj4A1U5JFI8ZHSKRS8TL5OxQBmMns2RrEYCqpUQMEe2F14CXV+sfyfvnoAzSIbw3ymhuIAAAAASUVORK5CYII=");
+}
+.reloadbutt {
+position: absolute;
+width: 16px;
+height: 16px;
+left: 1px;
+top: 1px;
+text-align: center;
+display:block;
+cursor: pointer;
+background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAIFJREFUeNpiYBiMQAGI5wPxeyD+D8XvoWIKhDQbIGkE0fuhGCa2npDNMIUNWOQLgFgAnwHz8WgmCryHYkKgAZsl95EC7D6BMIKpM0CWcECScMBjwHkkdefRJfuhmFpexen//9AAxwoEoE5rwKP5Pb4EpUAgIb1HDzyqJ2X6A4AAAwCZvjaqaWPUnwAAAABJRU5ErkJggg==");
+}
+
+#help {
+float:right;
+}
+
+.cmdlist ul {
+margin: 0;
+padding: 0;
+font-size: smaller;
+width: 100%;
+height: 50vh;
+overflow: auto;
+}
+
+.cmdlist li {
+ list-style: none;
+ cursor:pointer;
+}
+
+.cmdlist li:HOVER {
+    background-color: #CFC;
+}
+.content {
+position:relative;
+}
+.output {
+padding: 10px 20px 10px 20px;
+}
+.output .box {
+    background-color: #EFE;
+    float:left;
+    border: 1px solid;
+    position: relative;
+    margin: 5px;
+}
+
+.output .box .result{
+    resize:both;
+    overflow: auto;
+    padding: 10px;
+
+}
+
+.output .box.error {
+    background-color:#FEE;
+}
+
+.output .box.notify {
+    background-color:#EEF;
+}
+
+.output .box .title {
+    border-bottom: 1px solid;
+    background-color: #ABA;
+    font-weight: bold;
+    padding: 0px 20px 5px 20px;
+}
+
+.output .box.error .title {
+    background-color: #BAA;
+}
+
+.output .box.notify .title{
+    background-color:#AAB;
+}
+
+
+.output .box .spinner {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    margin-left:-0.5em;
+    margin-top: -0.5em;
+}
+
+.spinner {display: none;}
+
+.helpbox {
+margin: 10px 20px 10px 20px;
+ position:relative;
+ background-color: #FFC;
+ border: 1px solid black;
+ padding: 5px;
+ position:absolute;
+ right:0;
+ top:0;
+ z-index:999;
+display:none; 
+}
+
+#helptext.error {
+background-color:#FCC; 
+}
+
+#quickhelp {
+    background-color: #EED;
+    border: 1px solid black;
+    border-radius: 5px;
+    padding: 5px;
+    font-size: smaller;
+}
+
+
+
+table.jsontable, table.jsonlist {
+    border: 1px solid #AAA;
+    border-spacing: 0px 0px;
+    border-collapse:collapse;
+}
+th {
+    vertical-align:top;
+    text-align:center;
+    padding: 0px 10px 0px 10px;
+    border: 1px solid #CCC;
+    background-color: #EDD;
+
+}
+
+
+th.lfc {
+    text-align:right;
+    background-color: #DDC;
+    border: 1px solid #888;
+}
+
+table.jsontable td {
+    text-align:center;
+    border: 1px solid #CCC;
+    vertical-align: top;
+}
+
+table.jsonlist td {
+    text-align:left;
+    border: 1px solid #CCC;
+    vertical-align: top;
+}
+
+    .jsoncontent {
+        padding: 0 5px 0 5px;
+    }
+
+tr:nth-child(even) {background: #EEE}
+tr:nth-child(odd) {background: #FFF}
+
+.rpccontext {
+    border: 1px solid;
+    background-color: #FEF;
+    position: relative; 
+    margin: 5px;
+    display:none;
+    float:left; 
+}
+.rpccontext .title {
+    background-color: #CBC;
+    padding: 0px 20px 5px 20px;
+}
+
+#rpccontextdata {
+    resize:both;
+    overflow: auto;
+}
+
+#escapebutton {
+display:none;
+}
+
+.rpccontext textarea {
+display:block;
+width: 100%;
+ box-sizing: border-box;
+  -moz-box-sizing: border-box;
+  -webkit-box-sizing: border-box;
+
+}
+
+.rpchistory {
+    border: 1px solid;
+    background-color: #EEE;
+    position: absolute; 
+    margin: 5px;
+    display:none;
+    right:5px;
+    top:5px;
+    z-index:999;
+    
+}
+
+.rpchistory .title {
+    background-color: #BBB;
+    padding: 0px 20px 5px 20px;
+}
+
+.rpchistory em { 
+    padding: 10px;
+    font-weight: bold;
+}
+#rpchistorydata {
+    font-size: smaller;
+    overflow: auto;
+    max-width: 40vw;
+    max-height: 40vh;
+
+}
+#rpchistorydata div {
+border-bottom: 1px solid #888;
+margin-bottom: 1px;
+padding: 0px 3px 2px 3px;
+}
+@-moz-keyframes spinner-loader {
+  0% {
+    -moz-transform: rotate(0deg);
+    transform: rotate(0deg);
+  }
+  100% {
+    -moz-transform: rotate(360deg);
+    transform: rotate(360deg);
+  }
+}
+@-webkit-keyframes spinner-loader {
+  0% {
+    -webkit-transform: rotate(0deg);
+    transform: rotate(0deg);
+  }
+  100% {
+    -webkit-transform: rotate(360deg);
+    transform: rotate(360deg);
+  }
+}
+@keyframes spinner-loader {
+  0% {
+    -moz-transform: rotate(0deg);
+    -ms-transform: rotate(0deg);
+    -webkit-transform: rotate(0deg);
+    transform: rotate(0deg);
+  }
+  100% {
+    -moz-transform: rotate(360deg);
+    -ms-transform: rotate(360deg);
+    -webkit-transform: rotate(360deg);
+    transform: rotate(360deg);
+  }
+}
+/* :not(:required) hides this rule from IE9 and below */
+.spinner-loader:not(:required), .pending .spinner {
+  -moz-animation: spinner-loader 1500ms infinite linear;
+  -webkit-animation: spinner-loader 1500ms infinite linear;
+  animation: spinner-loader 1500ms infinite linear;
+  -moz-border-radius: 0.5em;
+  -webkit-border-radius: 0.5em;
+  border-radius: 0.5em;
+  -moz-box-shadow: rgba(0, 0, 51, 0.3) 1.5em 0 0 0, rgba(0, 0, 51, 0.3) 1.1em 1.1em 0 0, rgba(0, 0, 51, 0.3) 0 1.5em 0 0, rgba(0, 0, 51, 0.3) -1.1em 1.1em 0 0, rgba(0, 0, 51, 0.3) -1.5em 0 0 0, rgba(0, 0, 51, 0.3) -1.1em -1.1em 0 0, rgba(0, 0, 51, 0.3) 0 -1.5em 0 0, rgba(0, 0, 51, 0.3) 1.1em -1.1em 0 0;
+  -webkit-box-shadow: rgba(0, 0, 51, 0.3) 1.5em 0 0 0, rgba(0, 0, 51, 0.3) 1.1em 1.1em 0 0, rgba(0, 0, 51, 0.3) 0 1.5em 0 0, rgba(0, 0, 51, 0.3) -1.1em 1.1em 0 0, rgba(0, 0, 51, 0.3) -1.5em 0 0 0, rgba(0, 0, 51, 0.3) -1.1em -1.1em 0 0, rgba(0, 0, 51, 0.3) 0 -1.5em 0 0, rgba(0, 0, 51, 0.3) 1.1em -1.1em 0 0;
+  box-shadow: rgba(0, 0, 51, 0.3) 1.5em 0 0 0, rgba(0, 0, 51, 0.3) 1.1em 1.1em 0 0, rgba(0, 0, 51, 0.3) 0 1.5em 0 0, rgba(0, 0, 51, 0.3) -1.1em 1.1em 0 0, rgba(0, 0, 51, 0.3) -1.5em 0 0 0, rgba(0, 0, 51, 0.3) -1.1em -1.1em 0 0, rgba(0, 0, 51, 0.3) 0 -1.5em 0 0, rgba(0, 0, 51, 0.3) 1.1em -1.1em 0 0;
+  display: block;
+  font-size: 10px;
+  width: 1em;
+  height: 1em;
+  margin: 1.5em;
+  overflow: hidden;
+  text-indent: 100%;
+}
+</style>
+<script type="text/javascript" src="client.js"></script>
+<script type="text/javascript">
+window.rpc = new RpcClient("",{});
+
+
+</script>
+</head>
+
+<body>
+
+<div class="inputbox">
+<div class="label"><a href="#" id="showcmdlist">Command</a>:<div><label><input type="checkbox" id="showjson">JSON</label></div>
+<div><button id="escapebutton">Escape</button></div>
+</div>
+<div class="cmdline"><textarea id="cmdline" rows="3" cols="10"></textarea>
+
+<div id="quickhelp"><button id="help">?</button>
+<div id="quickhelptext">TIP: Use TAB key to list methods starting by the typed text. Use '[' key to show method variants</div>
+</div>
+
+</div>
+<div class="control"><button id="contextbutton">Context</button><br/><button id="historybutton">History</button><br/><button id="submit">Submit</button></div>
+<div id="cmdlist" class="cmdlist">
+<div id="cmdlistclose" class="closebutt"></div>
+</div>
+
+</div>
+<div class="content">
+<div class="helpbox" id="helpbox">
+<div id="helpclose" class="closebutt"></div>
+<div id="helptext">
+
+</div>
+</div>
+<div class="rpccontext" id="rpccontext">
+<div class="closebutt" id="closecontext"></div>
+<div class="title">Context</div>
+<div id="rpccontextdata"></div>
+<div class="inputblock">
+<textarea id="contextmodify"></textarea>
+<button id="contextupdate">Update</button>
+<button id="contextclear">Clear All</button>
+<button id="contextsave">Store</button>
+</div>
+</div>
+
+<div class="rpchistory" id="rpchistory">
+<div class="closebutt" id="closehistory"></div>
+<div class="title">History</div>
+<div id="rpchistorydata"></div>
+</div>
+
+<div class="output" id="output">
+
+</div>
+</div>
+
+<script type="text/javascript">
+
+var historyCommands = {};
+var historyWindow = [];
+
+//1 - inline - item is such small that can be put as one element
+//2 - item can be whole put at single line (or table cell)
+//3 
+//3 - complex item - takes more lines
+var ITEM_INLINE = 1;
+var ITEM_CELLTABLE = 2;
+var ITEM_LINE = 2;
+var ITEM_MULTILINE = 3;
+
+function getItemComplexLevel(item) {
+if (item == null) return ITEM_INLINE;
+if (typeof (item) == "number") return ITEM_INLINE;
+if (typeof (item) == "string") return item.length > 30 ? ITEM_CELLTABLE : ITEM_INLINE;
+if (typeof (item) == "boolean") return ITEM_INLINE;
+/*   if (item instanceof Array) {
+    var maxcomplex = ITEM_INLINE;
+    for (var i = 0; i < item.length; i++) {
+        var c = item[i];
+        var complex = getItemComplexLevel(c);
+        if (complex > maxcomplex) maxcomplex = complex;
+    }
+    if (maxcomplex < ITEM_MULTILINE && item.length > 4) maxcomplex++;
+    return maxcomplex;
+}*/
+return ITEM_MULTILINE;
+}
+
+function getTableColumns(item) {
+if (typeof (item) != "object") return null;
+    var columns = [];
+    var tc = 0;
+    for (var i in item) {
+        var localcol = [];
+        var totalLen = 0;
+        if (typeof(item[i]) != "object") return null;
+        for (var j in item[i]) {
+            var x = item[i][j];
+            var c = getItemComplexLevel(x);
+            if (c < ITEM_MULTILINE) {
+                totalLen += JSON.stringify(x).length;
+                if (totalLen > 200) return null;
+            }
+            localcol.push(j);
+        }
+
+        tc += localcol.length;
+        for (var j = 0; j < localcol.length; j++) {
+            if (columns.indexOf(localcol[j]) == -1) columns.push(localcol[j]);
+
+        }
+    }
+    if ( columns.length > 12) return null;
+    else return columns;
+}
+function formatRawResultToDOM(item, element) {
+var e = document.createElement("pre");
+e.appendChild(document.createTextNode(JSON.stringify(item, null, "    ")));
+element.appendChild(e);
+}
+
+
+function formatResultToDOM(item, element) {
+if (item != null && typeof (item) == "object") {
+    var columns = getTableColumns(item);
+     if (columns != null) {
+            var t = document.createElement("table");
+            t.className = "jsontable";
+            element.appendChild(t);
+            var r = document.createElement("tr");
+            var h = document.createElement("th");
+            r.appendChild(h);
+            h.className = "blind";
+            for (var i = 0; i < columns.length; i++) {
+                var h = document.createElement("th");
+                h.appendChild(document.createTextNode(columns[i]));
+                r.appendChild(h);
+                t.appendChild(r);
+            }
+            for (var i in  item) {
+                r = document.createElement("tr");
+                t.appendChild(r);
+                var h = document.createElement("th");
+                h.className = "lfc";
+                r.appendChild(h);
+                h.appendChild(document.createTextNode(i));
+                var v = item[i];
+                for (var j = 0; j < columns.length; j++) {
+                    var c = columns[j];
+                    var d = document.createElement("td");
+                    r.appendChild(d);
+                    if (v.hasOwnProperty(c)) formatResultToDOM(v[c], d);
+                }
+            }
+    } else {
+        var t = document.createElement("table");
+        t.className="jsonlist";
+        for (var i in item) {
+            var r = document.createElement("tr");
+            var h = document.createElement("th");
+            var d = document.createElement("td");
+            h.className = "lfc";
+            t.appendChild(r);
+            r.appendChild(h);
+            r.appendChild(d);
+            var value = item[i];
+            h.appendChild(document.createTextNode(i));
+            if (getItemComplexLevel(value) < ITEM_MULTILINE) {
+                var ct = document.createElement("div");
+                ct.className = "jsoncontent";
+                d.appendChild(ct);
+                ct.appendChild(document.createTextNode(JSON.stringify(value)));
+            } else {
+                formatResultToDOM(value, d);
+            }
+        }
+        element.appendChild(t);
+    }
+} else {
+    var ct = document.createElement("div");
+    ct.className = "jsoncontent";
+    element.appendChild(ct);
+    ct.appendChild(document.createTextNode(JSON.stringify(item)));
+}
+
+}
+
+
+
+function formatRawResultToDOM(item,element) {
+    var pre = document.createElement("pre");
+    var txt = JSON.stringify(item,null,"  ");
+    var splt = txt.split('\n');
+    for (var i = 0; i < splt.length; i++) {
+        pre.appendChild(document.createTextNode(splt[i]));
+        pre.appendChild(document.createElement("br"));
+    }
+    element.appendChild(pre);
+}
+
+function formatResult(item,element) {
+    if (document.getElementById("showjson").checked) {
+        formatRawResultToDOM(item,element);
+    } else {
+        formatResultToDOM(item,element);
+    }
+}
+
+
+function showMethodQuickHelp(method) {
+}
+
+function tryToParseRequest(txt) {
+    var idx = txt.indexOf('[');
+    if (idx == -1) return null;
+    var method = txt.substr(0,idx);
+    method = method.trim();
+    try {
+        var params = eval("("+txt.substr(idx)+")");
+        return {method:method,params:params};
+    } catch(x) {
+        return null;
+    }   
+}
+
+function updateContext() {
+    var element = document.getElementById("rpccontextdata");
+    element.innerHTML="";
+    formatResultToDOM(rpc.context,element);
+}
+
+function modifyContext() {
+    var value = this.value;
+    try {
+        var json = eval("({"+value+"})")
+        rpc.updateContext(json);
+        this.value = "";
+        updateContext();
+        return true;
+    } catch(x){     
+        return false;
+    }
+}
+
+function shorter(str) {
+    if (str.length >50) return str.substr(0,50)+"...";
+    else return str;
+}
+        
+var timeoutUpdate = null;
+function updateHistoryWindow() {
+    timeoutUpdate = null;
+    var win = document.getElementById("rpchistory");
+    if (win.style.display=="none") return;
+    var windata = document.getElementById("rpchistorydata");
+    windata.innerHTML="";
+    for (var i = 0; i < historyWindow.length; i++) {
+        var c= historyWindow[i];
+        var el = document.createElement("div");
+        var data = "";
+        var title = "";
+        if (c.command) {
+            el.classList.add(title = "command");
+            data = c.command.method + " " + JSON.stringify(c.command.params);
+        } else if (c.notify) {
+            el.classList.add(title = "notify");
+            data = c.notify.method + " " + JSON.stringify(c.notify.params);
+        }
+        var t = document.createElement("em");
+        t.appendChild(document.createTextNode(title));
+        var content;
+        if (c.command) {
+            content = document.createElement("a");
+            content.href="#";
+            content.addEventListener("click",function(){
+                document.getElementById("cmdline").value = this;
+            }.bind(data))
+            content.appendChild(document.createTextNode(data));                     
+        } else {
+            var content = document.createElement("span");
+            content.appendChild(document.createTextNode(data));
+            
+        }
+        el.appendChild(t);
+        el.appendChild(content);
+        windata.appendChild(el);
+    }
+    windata.scrollTop = windata.scrollHeight;
+}
+
+
+function storeToHistory(item) { 
+    console.log(item);
+    if (historyWindow.length) {
+        var x = historyWindow[historyWindow.length-1];
+        if (JSON.stringify(x) == JSON.stringify(item)) return;      
+    }
+    historyWindow.push(item);
+    if (historyWindow.length > 1000) historyWindow.shift();
+    if (timeoutUpdate == null) timeoutUpdate = setTimeout(updateHistoryWindow,250);
+}       
+
+        
+function submitRequest(req) {
+    
+    var key = req.method+" " + JSON.stringify(req.params);
+    var output = document.getElementById("output");
+    if (historyCommands[key]) {
+        output.removeChild(historyCommands[key]);
+        delete historyCommands[key];
+    }
+    storeToHistory({command:req});
+    
+    var box = document.createElement("div");    
+    box.classList.add("box");
+    function addReloadButton() {
+        var reloadbutt = document.createElement("div");
+        reloadbutt.classList.add("reloadbutt");
+        reloadbutt.addEventListener("click",submitToOutput);        
+        box.appendChild(reloadbutt);
+    }
+    function submitToOutput() {
+        box.classList.add("pending");
+        var res = rpc.call(req.method,req.params);
+        res.then(function(res) {
+            result.innerHTML="";
+            formatResult(res,result);
+            box.classList.remove("pending");        
+            box.classList.remove("error");      
+            addReloadButton();
+            updateContext();
+        },function(err) {
+            result.innerHTML="";
+            formatResult(err,result);
+            box.classList.remove("pending");
+            box.classList.add("error");
+            addReloadButton();
+        });
+        
+    }
+    var title = document.createElement("div");
+    title.classList.add("title");
+    var anch = document.createElement("a");
+    anch.href="#";  
+    title.appendChild(anch);
+    anch.appendChild(document.createTextNode(shorter(key)));
+    anch.addEventListener("click",function() {
+        document.getElementById("cmdline").value = key; 
+    })
+    box.appendChild(title);
+    var result = document.createElement("div");
+    result.classList.add("result");
+    box.appendChild(result);
+    if (output.firstChild) output.insertBefore(box,output.firstChild);
+    else output.appendChild(box);
+    var closebutt = document.createElement("div");
+    closebutt.classList.add("closebutt");
+    closebutt.addEventListener("click",function(){
+        output.removeChild(box);
+        delete historyCommands[key];
+    }); 
+    box.appendChild(closebutt);
+    var spinner = document.createElement("div");
+    spinner.classList.add("spinner");
+    box.appendChild(spinner);
+    submitToOutput();
+    historyCommands[key] = box;
+}
+
+
+function initMethodList() {
+    
+    window.rpc.ready.then(function(methods) {
+
+    	window.methods = methods;
+    	
+        var closeBox = function() {
+            element.style.display="none";
+        } 
+
+    	
+	    var element = document.getElementById("cmdlist");
+	    var lst = document.createElement("ul");
+	    for (var i = 0; i < methods.length; i++) {
+	        var m = methods[i];
+	        var itm = document.createElement("li");
+	        itm.appendChild(document.createTextNode(m));
+	        itm.addEventListener("click",function(a) {
+	            var ecmdline = document.getElementById("cmdline"); 
+	            ecmdline.value = a + "[]";
+	            ecmdline.focus();
+	            ecmdline.setSelectionRange(a.length+1,a.length+1);
+	            showMethodQuickHelp(a);
+	            closeBox();
+	        }.bind(this,m));
+	        lst.appendChild(itm);
+	    }
+	    element.appendChild(lst);
+    });
+}
+
+
+function showHelpOnFunction() {
+    var txt = this.value;
+    var chr = txt.indexOf('[');
+    if (chr != -1) txt = txt.substr(0,chr);
+    txt = txt.trim();
+    var helpbox = document.getElementById("helpbox");
+    helpbox.style.display="block";
+    var helptext = document.getElementById("helptext");
+    helptext.innerHTML=""
+    helptext.classList.add("pending");
+    helptext.classList.remove("error");
+    
+    var showHelpResult = function(x) {
+        this.classList.remove("pending");
+        this.innerHTML=x;
+    }
+
+    var showHelpError = function(x) {
+        this.classList.remove("pending");
+        this.classList.add("error");
+        this.appendChild(document.createTextNode(JSON.stringify(x)));
+    }
+    var spinner = document.createElement("div");
+    spinner.classList.add("spinner");
+    helptext.appendChild(spinner);
+
+    rpc.Server.help(txt).then(showHelpResult.bind(helptext),showHelpError.bind(helptext))
+}
+
+function hideHelp() {
+    var helpbox = document.getElementById("helpbox");
+    helpbox.style.display="none";
+    
+}
+
+function findMethod() {
+    var txt = this.value;
+    txt = txt.trim();
+    var s = "";
+    var found = false;
+    var finl = "";
+    for (var i = 0; i < methods.length; i++) {
+        var m = methods[i];
+        if (m.substr(0,txt.length) == txt) {
+            if (found) {
+                var c = m.substr(0,this.value.length);
+                for (var j = txt.length; j < this.value.length;j++)
+                if (j > c.length || c[j] != this.value[j]) {
+                    this.value = this.value.substr(0,j);
+                    break;
+                }
+                finl = "";
+            } else {                
+                this.value = m+" [";
+                found = true;
+                finl=m;
+            }
+            s = s + m + "<br>";
+        }
+    }
+    var eltext = document.getElementById("quickhelptext");
+    var element = document.getElementById("quickhelp");
+    eltext.innerHTML = s;
+    if (s) element.style.display="block";
+    if (finl) showMethodQuickHelp(finl);
+}
+
+function initControls() {
+    document.getElementById("showcmdlist").addEventListener("click",function() {
+        document.getElementById("cmdlist").style.display="block";
+    });
+    document.getElementById("cmdlistclose").addEventListener("click",function() {
+        document.getElementById("cmdlist").style.display="none";
+    });
+    var elcmdline = document.getElementById("cmdline");
+    elcmdline.addEventListener("keypress", function(e) {
+        if (e.keyCode == 13 && !e.shiftKey) {
+            var txt = elcmdline.value;
+            var req = tryToParseRequest(txt);
+            if (req) {
+                submitRequest(req);
+                e.preventDefault();
+            }
+        }
+        if (e.key == '[') {
+            var txt = elcmdline.value;
+            var idx =txt.indexOf('['); 
+            if (idx != -1) {
+                showMethodQuickHelp(txt.substr(0,idx).trim());          
+            } else {
+                showMethodQuickHelp(txt.trim());
+            }
+        }
+    });
+    elcmdline.addEventListener("keydown",function(e) {
+      var TABKEY = 9;
+        if(e.keyCode == TABKEY) {
+            findMethod.call(elcmdline);
+            e.preventDefault();
+            return false;
+        }       
+    })
+    elcmdline.addEventListener("select",function(e) {
+        
+    })
+    var elsubmit = document.getElementById("submit");
+    elsubmit.addEventListener("click",function() {      
+        var txt = elcmdline.value;
+        var req = tryToParseRequest(txt);
+        if (req) {
+            submitRequest(req);
+        } else {
+            alert("Error in command line - parse error");
+        }
+    });
+    var elrpccontextdata = document.getElementById("contextmodify");
+    var rpccontext = document.getElementById("rpccontext");
+    document.getElementById("help").addEventListener("click",showHelpOnFunction.bind(elcmdline));
+    document.getElementById("helpclose").addEventListener("click",hideHelp);
+    document.getElementById("contextupdate").addEventListener("click",modifyContext.bind(elrpccontextdata));
+    elrpccontextdata.addEventListener("keypress",function(e) {
+        if (e.keyCode == 13 && !e.shiftKey) {
+            if (modifyContext.call(elrpccontextdata)) {
+                e.preventDefault();
+            }
+        }       
+    });
+    document.getElementById("contextclear").addEventListener("click",function(){
+        rpc.context = {};
+        updateContext();
+    });
+    document.getElementById("contextsave").addEventListener("click",function(){
+        var strctx = JSON.stringify(rpc.context);
+        localStorage["context"] = strctx;       
+    });
+    document.getElementById("closecontext").addEventListener("click",function(){
+        rpccontext.style.display="none";
+    })
+    document.getElementById("contextbutton").addEventListener("click",function(){
+        rpccontext.style.display="block";
+    })
+    document.getElementById("closehistory").addEventListener("click",function(){
+        rpchistory.style.display="none";
+    })
+    document.getElementById("historybutton").addEventListener("click",function(){
+        rpchistory.style.display="block";
+        updateHistoryWindow();
+    })
+    
+}
+
+var notifyObjects = {}
+
+function createNotify(ntf, args) {
+    
+    var output = document.getElementById("output");
+
+    
+    var box = document.createElement("div");    
+    box.classList.add("box");
+    var title = document.createElement("div");
+    title.classList.add("title");
+    title.appendChild(document.createTextNode(ntf));
+    box.appendChild(title);
+    var result = document.createElement("div");
+    result.classList.add("result");
+    box.appendChild(result);
+    if (output.firstChild) output.insertBefore(box,output.firstChild);
+    else output.appendChild(box);
+    var closebutt = document.createElement("div");
+    closebutt.classList.add("closebutt");
+    closebutt.addEventListener("click",function(){
+        output.removeChild(box);
+        delete notifyObjects[ntf];
+    }); 
+    box.appendChild(closebutt);
+    formatResult(args,result);
+    box.classList.add("notify");
+    return {update:function(a) {
+            result.innerHTML="";
+            formatResult(a,result); 
+            }
+    }
+};
+    
+
+
+
+function initContext() {
+    if (localStorage["context"]) {
+        var ctx = JSON.parse(localStorage["context"]);
+        rpc.context = ctx;
+        wsrpc.context = ctx;
+        updateContext();
+    }
+}
+
+document.body.onload=function() {
+    
+    initMethodList();
+    initControls(); 
+    initContext();
+    
+}
+
+
+
+</script>
+
+</body>
+
+</html>
