@@ -53,10 +53,10 @@ err:
 
 class HashDigest: public BinaryView {
 public:
-	HashDigest(BinaryView data):BinaryView(digest, SHA224_DIGEST_LENGTH) {
+	HashDigest(const BinaryView &v):BinaryView(digest, SHA224_DIGEST_LENGTH) {
 		SHA256_CTX ctx;
 		SHA224_Init(&ctx);
-		SHA224_Update(&ctx,data.data, data.length);
+		SHA224_Update(&ctx,v.data, v.length);
 		SHA224_Final(digest,&ctx);
 	}
 
@@ -89,7 +89,7 @@ Value Token::parseToken(const StrViewA& token) {
 	if (sep == token.npos) return json::undefined;
 
 	StrViewA payload = token.substr(0,sep);
-	StrViewA signature = token.substr(sep+1);
+	StrViewA signature = token.substr(sep+separator.length);
 
 	Binary binpayload = encoder->decodeBinaryValue(payload).getBinary(encoder);
 	Binary binsignature = encoder->decodeBinaryValue(signature).getBinary(encoder);

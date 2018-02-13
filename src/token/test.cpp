@@ -10,12 +10,12 @@ int main(int argc, char **argv) {
 
 Token t1(Token::privateKey, "abcd1256");
 t1.setPreloadedKeys({"userId","roles","created"});
-t1.setEncoder(json::base64,"|");
 std::cout << "Public key: " << t1.getPublicKey() << std::endl;
 
 Token t2(Token::publicKey, t1.getPublicKey());
 t2.setPreloadedKeys(t1.getPreloadedKeys());
-t2.setEncoder(json::base64,"|");
+t2.setEncoder(json::urlEncoding,"|");
+t1.setEncoder(json::urlEncoding,"|");
 
 Value payload = Value::fromString("{\"userId\":12345,\"roles\":[\"user\"],\"created\":12314423423}");
 String token = t1.createToken(payload);
