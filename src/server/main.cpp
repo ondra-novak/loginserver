@@ -46,14 +46,25 @@ int main(int argc, char **argv) {
 	}
 
 
+
 	IniConfig config;
 	config.load(lst[0]);
 
+	couchit::Config couchcfg;
+	auto dbCfg = config["database"];
+	couchcfg.authInfo.username = dbCfg.mandatory["user"].getString();
+	couchcfg.authInfo.password = dbCfg.mandatory["password"].getString();
+	couchcfg.baseUrl =dbCfg.mandatory["url"].getString();
+	couchcfg.databaseName = dbCfg.mandatory["name"].getString();
+
+	CouchDB couchdb(couchcfg);
+
+
 	auto serverCfg = config["server"];
-	StrViewA hostMapping = serverCfg["mapHosts"].getString();
-	StrViewA straddr =  serverCfg["bind"].getString();
-	unsigned int threads  = serverCfg["threads"].getUInt();
-	unsigned int dispatchers  = serverCfg["dispatchers"].getUInt();
+	StrViewA hostMapping = serverCfg.mandatory["mapHosts"].getString();
+	StrViewA straddr =  serverCfg.mandatory["bind"].getString();
+	unsigned int threads  = serverCfg.mandatory["threads"].getUInt();
+	unsigned int dispatchers  = serverCfg.mandatory["dispatchers"].getUInt();
 	simpleServer::NetAddr addr = simpleServer::NetAddr::create(straddr,52123);
 
 
