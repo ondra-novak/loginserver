@@ -75,6 +75,10 @@ void UserProfile::disableOTP() {
 }
 
 UserID UserServices::createUser(const String& email) {
+	Value id = db.genUID();
+	Document usersrch;
+	usersrch.setID(String({"user:",email}));
+	usersrch.set("profile", id);
 
 }
 
