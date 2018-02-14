@@ -46,6 +46,10 @@ public:
 	 */
 	String create(Value userId, Value payload = Value());
 
+	void prepare(Value userId, Info &info);
+
+	String create(const Info &info);
+
 	///Parses user token
 	/**
 	 *

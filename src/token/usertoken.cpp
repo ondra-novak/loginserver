@@ -21,13 +21,21 @@ void UserToken::setRefreshExpireTime(std::size_t t) {
 
 String UserToken::create(Value userId, Value payload) {
 
-	auto now = timeSource();;
 	Info info;
+	prepare(userId, info);
+	info.payload = payload;
+	return create(info);
+}
+
+void UserToken::prepare(Value userId, Info &info) {
+	auto now = timeSource();;
 	info.userId = userId;
 	info.created = now;
 	info.expireTime = now+expiration;
 	info.refreshExpireTime = now+refreshExpiration+expiration;
-	info.payload = payload;
+}
+
+String UserToken::create(const Info &info) {
 	Value v = info2json(info);
 	return Token::createToken(v);
 }
