@@ -74,21 +74,40 @@ void UserProfile::enableOTP(const String& secret) {
 void UserProfile::disableOTP() {
 }
 
-UserID UserServices::createUser(const String& email) {
-	Value id = db.genUID();
-	Document usersrch;
-	usersrch.setID(String({"user:",email}));
-	usersrch.set("profile", id);
 
+UserID UserServices::createUser(const StrViewA& email) {
+	String userTag({"user:",email});
+	UserID userId ( db.genUID());
+	Document userReg;
+	userReg.setID(userTag);
+	userReg.set("profile", userId);
+	db.put(userReg);
+
+	time_t now;
+	time(&now);
+
+
+	UserProfile profile;
+	profile.setID(userId);
+	profile("email", email)
+		   ("createTime",(std::size_t)now)
+		   ("state","new");
+	db.put(profile);
+	return userId;
 }
 
-UserID UserServices::findUser(const String& email) const {
+UserID UserServices::findUser(const StrViewA& email) const {
+	String userTag({"user:",email});
+	Value doc = db.get(userTag,CouchDB::flgNullIfMissing);
+	return UserID(doc["profile"]);
 }
 
 UserProfile UserServices::loadProfile(const UserID& user) {
+	return UserProfile(db.get(user));
 }
 
-void UserServices::storeProfile(const UserProfile& profile) {
+void UserServices::storeProfile( UserProfile& profile) {
+	db.put(profile);
 }
 
 } /* namespace loginsrv */

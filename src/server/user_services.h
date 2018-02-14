@@ -21,6 +21,8 @@ typedef String UserID;
 class UserProfile: public Document {
 public:
 
+	using Document::Document;
+
 	bool checkPassword(const StrViewA &password);
 	bool checkOTP(unsigned int otpCode);
 
@@ -37,10 +39,10 @@ public:
 	UserServices(CouchDB &db):db(db) {}
 
 
-	UserID createUser(const String &email);
-	UserID findUser(const String &email) const;
+	UserID createUser(const StrViewA &email);
+	UserID findUser(const StrViewA &email) const;
 	UserProfile loadProfile(const UserID &user);
-	void storeProfile(const UserProfile &profile);
+	void storeProfile(UserProfile &profile);
 
 protected:
 	CouchDB &db;
