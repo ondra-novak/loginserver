@@ -6,3 +6,4 @@ file(GLOB server_HDR "*.h" "*.tcc")
 add_executable (loginsrv ${server_SRC} )
 target_link_libraries (loginsrv LINK_PUBLIC token simpleRpcServer simpleServer couchit imtjson crypto pthread)
 install(TARGETS loginsrv DESTINATION "bin") 
+ 
