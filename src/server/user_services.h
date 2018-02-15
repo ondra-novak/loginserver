@@ -27,6 +27,10 @@ public:
 class UserProfile: public Document {
 public:
 
+	static const int accessCodeLen = 7;
+	static const int accessCodeSep = 4;
+	static const int accessCodeTries = 3;
+
 	using Document::Document;
 
 	bool checkPassword(const StrViewA &password);
@@ -35,7 +39,21 @@ public:
 	void setPassword(const StrViewA &password);
 	void enableOTP(const String &secret);
 	void disableOTP();
-	void activate();
+
+	String genAccessCode(String purpose, std::size_t expire_tm);
+
+	enum TryResult {
+		///code accepted and removed
+		accepted = 0,
+		///code rejected, but state has been changed
+		rejected = 1,
+		///invalid request was invalid (no save needed)
+		invalid = -1
+
+	};
+
+	TryResult tryAcccessCode(String purpose, String code);
+
 
 	static Value calculatePasswordDigest(const StrViewA &salt, const StrViewA &password);
 };
@@ -43,10 +61,10 @@ public:
 
 class UserServices {
 public:
-	UserServices(CouchDB &db):db(db) {}
+	UserServices(CouchDB &db);
 
 
-	UserID createUser(const StrViewA &email);
+	UserProfile createUser(const StrViewA &email);
 	UserID findUser(const StrViewA &email) const;
 	UserProfile loadProfile(const UserID &user);
 	void storeProfile(UserProfile &profile);

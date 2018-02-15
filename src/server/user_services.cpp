@@ -13,6 +13,10 @@ namespace loginsrv {
 
 static const int saltLen = 16;
 
+UserServices::UserServices(CouchDB &db):db(db) {
+	CouchDB::fldTimestamp = "tm_modified";
+}
+
 String generateSalt() {
 	return String(saltLen,[](char *c){
 		std::random_device rnd;
@@ -75,8 +79,67 @@ void UserProfile::enableOTP(const String& secret) {
 void UserProfile::disableOTP() {
 }
 
+String UserProfile::genAccessCode(String purpose, std::size_t expire_tm) {
 
-UserID UserServices::createUser(const StrViewA& email) {
+	std::random_device rnd;
+	std::uniform_int_distribution<> dist('0','9');
+
+	char code[accessCodeLen];
+	for (int i = 0; i < accessCodeLen; i++) {
+		if (i % accessCodeSep == accessCodeSep-1) code[i] = '-';
+		else code[i] = dist(rnd);
+	}
+
+	time_t now;
+	time(&now);
+
+	object("access_code")
+		("code", StrViewA(code, accessCodeLen))
+		("purpose", purpose)
+		("tries", accessCodeTries)
+		("expires", now+expire_tm);
+	return StrViewA(code, accessCodeLen);
+
+}
+UserProfile::TryResult UserProfile::tryAcccessCode(String purpose, String code) {
+	bool clear = false;
+	TryResult tr;
+	{
+		auto sec = object("access_code");
+		ValueRef curcode(sec,"code");
+		ValueRef curpurpose(sec,"purpose");
+		ValueRef expires(sec,"expires");
+		ValueRef tries(sec,"tries");
+
+		time_t now;
+		time(&now);
+
+		if (curpurpose != purpose
+				|| !curcode.defined()
+				|| !expires.defined()
+				|| expires.getUInt() < now) {
+			tr = invalid;
+		} else if (curcode.getString() != code) {
+
+			int newtries = tries.getUInt()-1;
+			if (newtries == 0) {
+				clear = true;
+			} else {
+				tries = newtries;
+			}
+			tr = rejected;
+		} else {
+			clear = true;
+			tr = accepted;
+		}
+	}
+	if (clear) unset("access_code");
+	return tr;
+}
+
+
+
+UserProfile UserServices::createUser(const StrViewA& email) {
 	String userTag({"user:",email});
 	UserID userId ( db.genUID());
 	Document userReg;
@@ -90,11 +153,11 @@ UserID UserServices::createUser(const StrViewA& email) {
 
 	UserProfile profile;
 	profile.setID(userId);
-	profile("email", email)
-		   ("createTime",(std::size_t)now)
-		   ("state","new");
-	db.put(profile);
-	return userId;
+	profile
+		   ("tm_created",(std::size_t)now)
+		   ("public",Object("state","new")("email", email));
+	profile.enableTimestamp();
+	return profile;
 }
 
 UserID UserServices::findUser(const StrViewA& email) const {
@@ -111,9 +174,6 @@ void UserServices::storeProfile( UserProfile& profile) {
 	db.put(profile);
 }
 
-void UserProfile::activate() {
-	set("state","active");
-}
 
 
 } /* namespace loginsrv */

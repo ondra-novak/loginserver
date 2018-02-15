@@ -11,7 +11,6 @@ void RpcInterface::registerMethods(RpcServer& srv) {
 	srv.add("User.setPassword",this,&RpcInterface::rpcSetPassword);
 	srv.add("User.resetPassword",this,&RpcInterface::rpcResetPassword);
 	srv.add("User.requestResetPassword",this,&RpcInterface::rpcRequestResetPassword);
-	srv.add("Account.getAccountName",this,&RpcInterface::rpcGetAccountName);
 	srv.add("Account.load",this,&RpcInterface::rpcLoadAccount);
 	srv.add("Account.update",this,&RpcInterface::rpcSaveAccount);
 	srv.add("Token.parse",this,&RpcInterface::rpcTokenParse);
@@ -26,14 +25,10 @@ void RpcInterface::rpcRegisterUser(RpcRequest req) {
 		return req.setArgError();
 	}
 	StrViewA email = req.getArgs()[0].getString();
-	UserID uid = us.createUser(email);
-	UserToken::Info ses;
-	tok.prepare(uid, ses);
-	ses.expireTime = ses.created;
-	ses.refreshExpireTime = ses.created+expireAccountCreate;
-	ses.payload = "resetpwd";
-	String token = tok.create(ses);
-	mail("register",email, Object("token", token));
+	UserProfile prof = us.createUser(email);
+	String code = prof.genAccessCode("resetpwd", expireAccountCreate);
+	us.storeProfile(prof);
+	mail("register", email, Object("code", code));
 	req.setResult(true);
 }
 
@@ -59,21 +54,26 @@ void RpcInterface::rpcGetPublicKey(RpcRequest req) {
 }
 
 void RpcInterface::rpcResetPassword(RpcRequest req) {
-	if (!req.checkArgs({"string","string"})) {
+	if (!req.checkArgs({Object("email","string")("code","string")("password","string")})) {
 		return req.setArgError();
 	}
-	auto args = req.getArgs();
-	StrViewA token = args[0].getString();
-	StrViewA password = args[1].getString();
-	UserToken::Info tinfo;
-	if (tok.parse(token,tinfo) != UserToken::expired
-			|| tinfo.payload.getString()!="resetpwd")
-		return sendInvalidToken(req);
-
-	UserProfile prof = us.loadProfile(String(tinfo.userId));
-	prof.setPassword(password);
-	us.storeProfile(prof);
-	req.setResult(true);
+	auto args = req.getArgs()[0];
+	StrViewA email = args["email"].getString();
+	StrViewA code= args["code"].getString();
+	StrViewA pwd= args["password"].getString();
+	UserID id = us.findUser(email);
+	if (id.empty()) return sendInvalidToken(req);
+	UserProfile prof = us.loadProfile(id);
+	auto tr = prof.tryAcccessCode("resetpwd",code);
+	if (tr == UserProfile::accepted) {
+		prof.setPassword(pwd);
+		req.setResult(true);
+	} else {
+		sendInvalidToken(req);
+	}
+	if (tr == UserProfile::rejected || tr == UserProfile::accepted) {
+		us.storeProfile(prof);
+	}
 }
 
 
@@ -85,12 +85,11 @@ void RpcInterface::rpcRequestResetPassword(RpcRequest req) {
 	StrViewA email = args[0].getString();
 	UserID id = us.findUser(email);
 	if (id.empty()) return req.setError(404,"Not found");
-	UserToken::Info tinfo;
-	tok.prepare(id,tinfo);
-	tinfo.expireTime = tinfo.created;
-	tinfo.refreshExpireTime = tinfo.created+expireAccountCreate;
-	tinfo.payload = "resetpwd";
-	mail("resetpwd",email,Object("token", tok.create(tinfo)));
+	UserProfile prof = us.loadProfile(id);
+	String code = prof.genAccessCode("resetpwd", expireAccountCreate);
+	us.storeProfile(prof);
+	mail("resetpwd",email,Object("code", code));
+
 	req.setResult(true);
 }
 
@@ -118,7 +117,7 @@ void RpcInterface::rpcLoadAccount(RpcRequest req) {
 	UserToken::Info tinfo;
 	if (tok.parse(token,tinfo) != UserToken::valid) return sendInvalidToken(req);
 	UserProfile prof = us.loadProfile(tinfo.userId);
-	req.setResult(prof);
+	req.setResult(prof["public"]);
 }
 
 void RpcInterface::rpcSaveAccount(RpcRequest req) {
@@ -132,7 +131,7 @@ void RpcInterface::rpcSaveAccount(RpcRequest req) {
 	UserToken::Info tinfo;
 	if (tok.parse(token,tinfo) != UserToken::valid) return sendInvalidToken(req);
 	UserProfile p = us.loadProfile(tinfo.userId);
-	p = Value(p).merge(update);
+	p = Value(p).merge(Object("public",update));
 	us.storeProfile(p);
 	req.setResult(true);
 }
@@ -225,6 +224,8 @@ void RpcInterface::rpcLogin(RpcRequest req) {
 			   ("config", cfg);
 
 			req.setResult(res);
+		} else {
+			req.setError(401,"Invalid credentials");
 		}
 	} catch (...) {
 		req.setError(401,"Invalid credentials");
