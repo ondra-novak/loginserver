@@ -84,7 +84,7 @@ int main(int argc, char **argv) {
 	auto serverCfg = config["server"];
 
 	LogLevelToStrTable levelToStr;
-	(new StdLogFile(serverCfg["log_file"].getPath(), levelToStr.fromString(serverCfg["logLevel"].getString(), LogLevel::info)))->setDefault();
+	(new StdLogFile(serverCfg["log_file"].getPath(), levelToStr.fromString(serverCfg["log_level"].getString(), LogLevel::info)))->setDefault();
 
 	StrViewA hostMapping = serverCfg.mandatory["map_hosts"].getString();
 	StrViewA straddr =  serverCfg.mandatory["bind"].getString();
@@ -113,13 +113,29 @@ int main(int argc, char **argv) {
 	auto loginCfg = config["login"];
 	Value privateKey = loginCfg.mandatory["private_key"].getString();
 	std::string userConfig = loginCfg.mandatory["user_config"].getPath();
+	std::string sendCmd = loginCfg.mandatory["mail_svc"].getString();
+	std::string templatePrefix = loginCfg["mail_template_prefix"].getString();
+
 
 	Value userConfigJson = readUserConfig(userConfig);
 
 	UserToken tok(Token::privateKey, String(privateKey));
+	tok.setExpireTime(loginCfg.mandatory["token_expiration"].getUInt());
+	tok.setRefreshExpireTime(loginCfg.mandatory["token_refresh_expiration"].getUInt());
 	UserServices us(couchdb);
-	RpcInterface ifc(us, tok, [](StrViewA templt,StrViewA email, Value payload){
-		ondra_shared::logInfo("Templare: $1, email: $2, payload: $3", templt, email, payload.toString());
+	RpcInterface ifc(us, tok, [=](StrViewA templt,StrViewA email, Value payload){
+		Value req = Object("template",String({templatePrefix,templt}))
+				("recepient", email)
+				("data", payload);
+		ondra_shared::logDebug("Send mail: $1 - $2", sendCmd, req.toString());
+		FILE *f = popen(sendCmd.c_str(),"w");
+		if (f == nullptr) {
+			ondra_shared::logError("Cannot execute command: $1",sendCmd);
+		} else {
+			req.toFile(f);
+			int res = pclose(f);
+			if (res) ondra_shared::logError("Unexpected exit status for command: $1 - exit $2",sendCmd, res);
+		}
 		}, userConfigJson);
 
 	ifc.registerMethods(server);

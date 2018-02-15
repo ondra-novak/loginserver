@@ -7,7 +7,7 @@ void RpcInterface::registerMethods(RpcServer& srv) {
 
 
 	srv.add("User.create",this,&RpcInterface::rpcRegisterUser);
-	srv.add("User.loginPwd",this,&RpcInterface::rpcLogin);
+	srv.add("User.login",this,&RpcInterface::rpcLogin);
 	srv.add("User.setPassword",this,&RpcInterface::rpcSetPassword);
 	srv.add("User.resetPassword",this,&RpcInterface::rpcResetPassword);
 	srv.add("User.requestResetPassword",this,&RpcInterface::rpcRequestResetPassword);
@@ -25,7 +25,17 @@ void RpcInterface::rpcRegisterUser(RpcRequest req) {
 		return req.setArgError();
 	}
 	StrViewA email = req.getArgs()[0].getString();
-	UserProfile prof = us.createUser(email);
+	UserID id = us.findUser(email);
+	UserProfile prof;
+	if (id.empty()) {
+		 prof = us.createUser(email);
+	} else {
+		prof = us.loadProfile(id);
+		if (prof["password"].defined()) {
+			req.setError(409,"Already exists");
+			return;
+		}
+	}
 	String code = prof.genAccessCode("resetpwd", expireAccountCreate);
 	us.storeProfile(prof);
 	mail("register", email, Object("code", code));
@@ -190,21 +200,28 @@ void RpcInterface::rpcTokenRefresh(RpcRequest req) {
 	if (newtok.empty()) {
 		return req.setError(410, "Token has been revoked");
 	} else {
-		req.setResult(newtok);
+		req.setResult(Object("expires",tinfo.expireTime)("token",newtok));
 	}
 }
 
 void RpcInterface::rpcLogin(RpcRequest req) {
-	if (!req.checkArgs({"string","string",{"boolean","optional"}})) {
+	static Value argDef = Value::fromString(
+	 "[{\"user\":\"string\","
+	 "\"password\":\"string\","
+	 "\"otp\":[\"string\",\"optional\"],"
+	 "\"keep\":[\"boolean\",\"optional\"]}]");
+
+	if (!req.checkArgs(argDef)) {
 		return req.setArgError();
 	}
-	Value args = req.getArgs();
-	StrViewA email = args[0].getString();
-	StrViewA password = args[1].getString();
-	bool remember = args[2].getBool();
+	Value args = req.getArgs()[0];
+	StrViewA user = args["user"].getString();
+	StrViewA password = args["password"].getString();
+	StrViewA otp = args["otp"].getString();
+	bool remember = args["keep"].getBool();
 
 	try {
-		UserID userid = us.findUser(email);
+		UserID userid = us.findUser(user);
 		UserProfile prof = us.loadProfile(userid);
 		if (prof.checkPassword(password)) {
 

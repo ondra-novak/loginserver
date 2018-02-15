@@ -69,7 +69,7 @@ String UserToken::refresh(Info& info, time_t revokeTime) {
 	if (info.refreshExpireTime < now) return String();
 	if (info.created < revokeTime) return String();
 	info.expireTime = now+expiration;
-	info.refreshExpireTime=now+refreshExpiration;
+	info.refreshExpireTime=info.expireTime+refreshExpiration;
 	return Token::createToken(info2json(info));
 }
 
