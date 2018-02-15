@@ -135,6 +135,7 @@ bool Token::setPublicKey(const StrViewA &keyBase64) {
 static std::shared_ptr<BIGNUM> parsePrivateKey(json::BinaryEncoding encoder, const StrViewA &keyBase64) {
 	Value k = encoder->decodeBinaryValue(keyBase64);
 	Binary b = k.getBinary(encoder);
+	if (b.empty()) throw std::runtime_error("Invalid private key");
 	BIGNUM* bn = BN_bin2bn(b.data, b.length, BN_new());
 	return std::shared_ptr<BIGNUM>(bn, &BN_free);
 }

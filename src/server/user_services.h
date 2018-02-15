@@ -16,7 +16,13 @@ namespace loginsrv {
 using namespace couchit;
 using namespace json;
 
-typedef String UserID;
+class UserID: public String {
+public:
+	UserID() {}
+	UserID(const Value &v):String(v) {}
+	UserID(const String &v):String(v) {}
+	UserID(const StrViewA &v):String(v) {}
+};
 
 class UserProfile: public Document {
 public:
@@ -29,6 +35,7 @@ public:
 	void setPassword(const StrViewA &password);
 	void enableOTP(const String &secret);
 	void disableOTP();
+	void activate();
 
 	static Value calculatePasswordDigest(const StrViewA &salt, const StrViewA &password);
 };

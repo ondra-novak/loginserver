@@ -43,9 +43,10 @@ Value UserProfile::calculatePasswordDigest(const StrViewA &salt, const StrViewA 
 
 void UserProfile::setPassword(const StrViewA& password) {
 	String salt = generateSalt();
+	Value digest = calculatePasswordDigest(salt, password);
 	object("password")
-		("salt", salt);
-		("digest", calculatePasswordDigest(salt, password));
+		("salt", salt)
+		("digest", digest);
 }
 
 
@@ -110,4 +111,10 @@ void UserServices::storeProfile( UserProfile& profile) {
 	db.put(profile);
 }
 
+void UserProfile::activate() {
+	set("state","active");
+}
+
+
 } /* namespace loginsrv */
+

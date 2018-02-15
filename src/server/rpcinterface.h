@@ -18,8 +18,11 @@ public:
 
 	typedef std::function<void(StrViewA,StrViewA, Value)> SendMailFn; //template, email,data
 
-	RpcInterface (UserServices &us, UserToken &tok, const SendMailFn &mail)
-			:us(us),tok(tok),mail(mail) {}
+	RpcInterface (UserServices &us,
+				  UserToken &tok,
+				  const SendMailFn &mail,
+				  const Value &configObj)
+			:us(us),tok(tok),mail(mail),configObj(configObj) {}
 
 	void registerMethods(RpcServer &srv);
 
@@ -31,15 +34,23 @@ public:
 	void rpcTokenRefresh(RpcRequest req);
 	void rpcTokenRevokeAll(RpcRequest req);
 	void rpcSetPassword(RpcRequest req);
+	void rpcResetPassword(RpcRequest req);
+	void rpcRequestResetPassword(RpcRequest req);
+	void rpcGetAccountName(RpcRequest req);
+	void rpcLoadAccount(RpcRequest req);
+	void rpcSaveAccount(RpcRequest req);
+	void rpcGetPublicKey(RpcRequest req);
 
 
 protected:
 	UserServices &us;
 	UserToken &tok;
 	SendMailFn mail;
+	Value configObj;
 
 private:
 	void sendInvalidToken(json::RpcRequest req);
+
 };
 
 

@@ -17,6 +17,9 @@
 #include <simpleServer/http_filemapper.h>
 #include <simpleServer/logOutput.h>
 #include <shared/ini_config.h>
+#include <token/usertoken.h>
+#include "rpcinterface.h"
+#include "user_services.h"
 
 
 using ondra_shared::StdLogFile;
@@ -24,8 +27,24 @@ using ondra_shared::IniConfig;
 using namespace couchit;
 using namespace json;
 using namespace simpleServer;
+using namespace loginsrv;
 
 
+static Value readUserConfig(const std::string &name) {
+
+	std::ifstream inf(name, std::ios::in);
+	if (!inf) {
+		std::string error = "Can't read user config: " + name;
+		throw std::runtime_error(error);
+	}
+	try {
+		return Value::fromStream(inf);
+	} catch (std::exception &e) {
+		std::string error("Failed to read user config: ");
+		error.append(e.what());
+		throw std::runtime_error(error);
+	}
+}
 
 
 int main(int argc, char **argv) {
@@ -50,6 +69,8 @@ int main(int argc, char **argv) {
 	IniConfig config;
 	config.load(lst[0]);
 
+
+
 	couchit::Config couchcfg;
 	auto dbCfg = config["database"];
 	couchcfg.authInfo.username = dbCfg.mandatory["user"].getString();
@@ -61,7 +82,11 @@ int main(int argc, char **argv) {
 
 
 	auto serverCfg = config["server"];
-	StrViewA hostMapping = serverCfg.mandatory["mapHosts"].getString();
+
+	LogLevelToStrTable levelToStr;
+	(new StdLogFile(serverCfg["log_file"].getPath(), levelToStr.fromString(serverCfg["logLevel"].getString(), LogLevel::info)))->setDefault();
+
+	StrViewA hostMapping = serverCfg.mandatory["map_hosts"].getString();
 	StrViewA straddr =  serverCfg.mandatory["bind"].getString();
 	unsigned int threads  = serverCfg.mandatory["threads"].getUInt();
 	unsigned int dispatchers  = serverCfg.mandatory["dispatchers"].getUInt();
@@ -74,19 +99,30 @@ int main(int argc, char **argv) {
 
 	svc.changeUser(serverCfg["user"].getString());
 
-	LogLevelToStrTable levelToStr;
 
-	(new StdLogFile(serverCfg["logFile"].getPath(), levelToStr.fromString(serverCfg["logLevel"].getString(), LogLevel::info)))->setDefault();
 
 	svc.enableRestart();
 
-	std::string client  = serverCfg["webClient"].getPath();
+	std::string client  = serverCfg.mandatory["web_client"].getPath();
 	server.addRPCPath("/RPC", client);
 
 
 	server.add_listMethods("methods");
 	server.add_ping("ping");
 
+	auto loginCfg = config["login"];
+	Value privateKey = loginCfg.mandatory["private_key"].getString();
+	std::string userConfig = loginCfg.mandatory["user_config"].getPath();
+
+	Value userConfigJson = readUserConfig(userConfig);
+
+	UserToken tok(Token::privateKey, String(privateKey));
+	UserServices us(couchdb);
+	RpcInterface ifc(us, tok, [](StrViewA templt,StrViewA email, Value payload){
+		ondra_shared::logInfo("Templare: $1, email: $2, payload: $3", templt, email, payload.toString());
+		}, userConfigJson);
+
+	ifc.registerMethods(server);
 
 
 	server.start();

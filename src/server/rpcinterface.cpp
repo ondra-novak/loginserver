@@ -9,9 +9,15 @@ void RpcInterface::registerMethods(RpcServer& srv) {
 	srv.add("User.create",this,&RpcInterface::rpcRegisterUser);
 	srv.add("User.loginPwd",this,&RpcInterface::rpcLogin);
 	srv.add("User.setPassword",this,&RpcInterface::rpcSetPassword);
+	srv.add("User.resetPassword",this,&RpcInterface::rpcResetPassword);
+	srv.add("User.requestResetPassword",this,&RpcInterface::rpcRequestResetPassword);
+	srv.add("Account.getAccountName",this,&RpcInterface::rpcGetAccountName);
+	srv.add("Account.load",this,&RpcInterface::rpcLoadAccount);
+	srv.add("Account.update",this,&RpcInterface::rpcSaveAccount);
 	srv.add("Token.parse",this,&RpcInterface::rpcTokenParse);
 	srv.add("Token.refresh",this,&RpcInterface::rpcTokenRefresh);
 	srv.add("Token.revokeAll",this,&RpcInterface::rpcTokenRevokeAll);
+	srv.add("Token.getPublicKey",this,&RpcInterface::rpcGetPublicKey);
 
 }
 
@@ -25,7 +31,7 @@ void RpcInterface::rpcRegisterUser(RpcRequest req) {
 	tok.prepare(uid, ses);
 	ses.expireTime = ses.created;
 	ses.refreshExpireTime = ses.created+expireAccountCreate;
-	ses.payload = "create";
+	ses.payload = "resetpwd";
 	String token = tok.create(ses);
 	mail("register",email, Object("token", token));
 	req.setResult(true);
@@ -48,6 +54,88 @@ void RpcInterface::rpcTokenRevokeAll(RpcRequest req) {
 	req.setResult(tok.create(tinfo));
 }
 
+void RpcInterface::rpcGetPublicKey(RpcRequest req) {
+	req.setResult(tok.getPublicKey());
+}
+
+void RpcInterface::rpcResetPassword(RpcRequest req) {
+	if (!req.checkArgs({"string","string"})) {
+		return req.setArgError();
+	}
+	auto args = req.getArgs();
+	StrViewA token = args[0].getString();
+	StrViewA password = args[1].getString();
+	UserToken::Info tinfo;
+	if (tok.parse(token,tinfo) != UserToken::expired
+			|| tinfo.payload.getString()!="resetpwd")
+		return sendInvalidToken(req);
+
+	UserProfile prof = us.loadProfile(String(tinfo.userId));
+	prof.setPassword(password);
+	us.storeProfile(prof);
+	req.setResult(true);
+}
+
+
+void RpcInterface::rpcRequestResetPassword(RpcRequest req) {
+	if (!req.checkArgs({"string"})) {
+		return req.setArgError();
+	}
+	auto args = req.getArgs();
+	StrViewA email = args[0].getString();
+	UserID id = us.findUser(email);
+	if (id.empty()) return req.setError(404,"Not found");
+	UserToken::Info tinfo;
+	tok.prepare(id,tinfo);
+	tinfo.expireTime = tinfo.created;
+	tinfo.refreshExpireTime = tinfo.created+expireAccountCreate;
+	tinfo.payload = "resetpwd";
+	mail("resetpwd",email,Object("token", tok.create(tinfo)));
+	req.setResult(true);
+}
+
+void RpcInterface::rpcGetAccountName(RpcRequest req) {
+	if (!req.checkArgs({"string"})) {
+		return req.setArgError();
+	}
+	auto args = req.getArgs();
+	StrViewA token = args[0].getString();
+	UserToken::Info tinfo;
+	if (tok.parse(token,tinfo) == UserToken::invalid) return sendInvalidToken(req);
+	UserProfile prof = us.loadProfile(tinfo.userId);
+	req.setResult(Object("email", prof["email"])
+						("state", prof["state"]));
+
+
+}
+
+void RpcInterface::rpcLoadAccount(RpcRequest req) {
+	if (!req.checkArgs({"string"})) {
+		return req.setArgError();
+	}
+	auto args = req.getArgs();
+	StrViewA token = args[0].getString();
+	UserToken::Info tinfo;
+	if (tok.parse(token,tinfo) != UserToken::valid) return sendInvalidToken(req);
+	UserProfile prof = us.loadProfile(tinfo.userId);
+	req.setResult(prof);
+}
+
+void RpcInterface::rpcSaveAccount(RpcRequest req) {
+	static Value argformat = Value::fromString("{\"_id\":\"optional\",\"_rev\":\"optional\",\"password\":\"optional\",\"%\":\"any\"}");
+	if (!req.checkArgs({"string", argformat})) {
+		return req.setArgError();
+	}
+	auto args = req.getArgs();
+	StrViewA token = args[0].getString();
+	Value update = args[1];
+	UserToken::Info tinfo;
+	if (tok.parse(token,tinfo) != UserToken::valid) return sendInvalidToken(req);
+	UserProfile p = us.loadProfile(tinfo.userId);
+	p = Value(p).merge(update);
+	us.storeProfile(p);
+	req.setResult(true);
+}
 
 void RpcInterface::sendInvalidToken(RpcRequest req) {
 	return req.setError(402, "Invalid token");
@@ -80,8 +168,7 @@ void RpcInterface::rpcTokenParse(RpcRequest req) {
 	case UserToken::invalid:
 		return sendInvalidToken(req);
 	}
-
-
+	req.setResult(result);
 }
 
 void RpcInterface::rpcTokenRefresh(RpcRequest req) {
@@ -109,25 +196,60 @@ void RpcInterface::rpcTokenRefresh(RpcRequest req) {
 }
 
 void RpcInterface::rpcLogin(RpcRequest req) {
-	if (!req.checkArgs({"string"."string"})) {
+	if (!req.checkArgs({"string","string",{"boolean","optional"}})) {
 		return req.setArgError();
 	}
+	Value args = req.getArgs();
+	StrViewA email = args[0].getString();
+	StrViewA password = args[1].getString();
+	bool remember = args[2].getBool();
 
+	try {
+		UserID userid = us.findUser(email);
+		UserProfile prof = us.loadProfile(userid);
+		if (prof.checkPassword(password)) {
+
+			UserToken::Info tnfo;
+			tok.prepare(userid, tnfo);
+			if (!remember) tnfo.refreshExpireTime = tnfo.expireTime;
+			String token = tok.create(tnfo);
+			String choosenConfig (prof["config"]);
+			Value cfg = configObj[choosenConfig];
+			if (!cfg.defined()) {
+				cfg = configObj[""];
+			}
+
+			Object res;
+			res("token", token)
+			   ("expires", tnfo.expireTime)
+			   ("config", cfg);
+
+			req.setResult(res);
+		}
+	} catch (...) {
+		req.setError(401,"Invalid credentials");
+	}
 }
 
 void RpcInterface::rpcSetPassword(RpcRequest req) {
-	if (!req.checkArgs({"string","string"})) {
+	if (!req.checkArgs({"string","string","string"})) {
 		return req.setArgError();
 	}
-	StrViewA token = req.getArgs()[0].getString();
-	StrViewA password = req.getArgs()[1].getString();
+	Value args = req.getArgs();
+	StrViewA token = args[0].getString();
+	StrViewA old_password = args[1].getString();
+	StrViewA password = args[2].getString();
 	UserToken::Info tinfo;
 	if (tok.parse(token,tinfo)) return sendInvalidToken(req);
 
 	UserProfile prof = us.loadProfile(UserID(tinfo.userId));
-	prof.setPassword(password);
-	us.storeProfile(prof);
-	req.setResult(true);
+	if (!prof.checkPassword(old_password)) {
+		req.setError(403,"Password doesn't match");
+	} else {
+		prof.setPassword(password);
+		us.storeProfile(prof);
+		req.setResult(true);
+	}
 }
 
 
