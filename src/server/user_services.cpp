@@ -70,6 +70,7 @@ bool UserProfile::checkPassword(const StrViewA& password) {
 }
 
 bool UserProfile::checkOTP(unsigned int otpCode) {
+return false;
 }
 
 
