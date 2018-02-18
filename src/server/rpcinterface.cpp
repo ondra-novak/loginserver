@@ -2,6 +2,8 @@
 
 namespace loginsrv {
 
+#define JSON(...) #__VA_ARGS__
+
 
 void RpcInterface::registerMethods(RpcServer& srv) {
 
@@ -17,14 +19,22 @@ void RpcInterface::registerMethods(RpcServer& srv) {
 	srv.add("Token.refresh",this,&RpcInterface::rpcTokenRefresh);
 	srv.add("Token.revokeAll",this,&RpcInterface::rpcTokenRevokeAll);
 	srv.add("Token.getPublicKey",this,&RpcInterface::rpcGetPublicKey);
+	srv.add("Admin.loadAccount",this,&RpcInterface::rpcAdminLoadAccount);
+	srv.add("Admin.updateAccount",this,&RpcInterface::rpcAdminUpdateAccount);
 
 }
 
 void RpcInterface::rpcRegisterUser(RpcRequest req) {
-	if (!req.checkArgs({"string"})) {
+	static Value argdef = Value::fromString(R"([{"email":"string", "captcha":["string","optional"]}])");
+	if (!req.checkArgs({argdef})) {
 		return req.setArgError();
 	}
-	StrViewA email = req.getArgs()[0].getString();
+	auto args = req.getArgs()[0];
+	StrViewA email = args["email"].getString();
+	StrViewA c = args["captcha"].getString();
+	if (!captcha(c)) {
+		return req.setError(402, "Captcha challenge failed");
+	}
 	UserID id = us.findUser(email);
 	UserProfile prof;
 	if (id.empty()) {
@@ -75,24 +85,31 @@ void RpcInterface::rpcResetPassword(RpcRequest req) {
 	if (id.empty()) return sendInvalidToken(req);
 	UserProfile prof = us.loadProfile(id);
 	auto tr = prof.tryAcccessCode("resetpwd",code);
+	auto sendWarn = prof.hasPassword();
 	if (tr == UserProfile::accepted) {
 		prof.setPassword(pwd);
 		req.setResult(true);
+		if (sendWarn) mail("pwdchanged",email,Object());
+	} else if (tr == UserProfile::invalid) {
+			return req.setError(410,"Gone");
 	} else {
-		sendInvalidToken(req);
+			sendInvalidToken(req);
 	}
-	if (tr == UserProfile::rejected || tr == UserProfile::accepted) {
-		us.storeProfile(prof);
-	}
+	us.storeProfile(prof);
 }
 
 
 void RpcInterface::rpcRequestResetPassword(RpcRequest req) {
-	if (!req.checkArgs({"string"})) {
+	static Value argdef = Value::fromString(R"([{"email":"string", "captcha":["string","optional"]}])");
+	if (!req.checkArgs(argdef)) {
 		return req.setArgError();
 	}
-	auto args = req.getArgs();
-	StrViewA email = args[0].getString();
+	auto args = req.getArgs()[0];
+	StrViewA email = args["email"].getString();
+	StrViewA c = args["captcha"].getString();
+	if (!captcha(c)) {
+		return req.setError(402, "Captcha challenge failed");
+	}
 	UserID id = us.findUser(email);
 	if (id.empty()) return req.setError(404,"Not found");
 	UserProfile prof = us.loadProfile(id);
@@ -131,8 +148,7 @@ void RpcInterface::rpcLoadAccount(RpcRequest req) {
 }
 
 void RpcInterface::rpcSaveAccount(RpcRequest req) {
-	static Value argformat = Value::fromString("{\"_id\":\"optional\",\"_rev\":\"optional\",\"password\":\"optional\",\"%\":\"any\"}");
-	if (!req.checkArgs({"string", argformat})) {
+	if (!req.checkArgs({"string", Object("%","any")})) {
 		return req.setArgError();
 	}
 	auto args = req.getArgs();
@@ -141,10 +157,23 @@ void RpcInterface::rpcSaveAccount(RpcRequest req) {
 	UserToken::Info tinfo;
 	if (tok.parse(token,tinfo) != UserToken::valid) return sendInvalidToken(req);
 	UserProfile p = us.loadProfile(tinfo.userId);
+	if (update["roles"].defined() || update["email"].defined()) {
+		return req.setError(403,"Forbidden","Can't update read-only fields");
+	}
+	if (update["alias"].defined()) {
+		StrViewA a = update["alias"].getString();
+		if (!a.empty()) {
+			UserID id = us.findUser(a);
+			if (!id.empty() && id != String(tinfo.userId))
+				return req.setError(409,"Alias is already used");
+		}
+	}
 	p = Value(p).merge(Object("public",update));
 	us.storeProfile(p);
-	req.setResult(true);
+	req.setResult(Value(p)["public"]);
 }
+
+
 
 void RpcInterface::sendInvalidToken(RpcRequest req) {
 	return req.setError(402, "Invalid token");
@@ -266,9 +295,50 @@ void RpcInterface::rpcSetPassword(RpcRequest req) {
 	} else {
 		prof.setPassword(password);
 		us.storeProfile(prof);
+		mail("pwdchanged",prof["public"]["email"].getString(),Object());
 		req.setResult(true);
 	}
 }
 
+void RpcInterface::rpcAdminLoadAccount(RpcRequest req) {
+	if (!req.checkArgs({"string","string"})) {
+		return req.setArgError();
+	}
+	auto args = req.getArgs();
+	StrViewA token = args[0].getString();
+	StrViewA userid = args[1].getString();
+	UserToken::Info tinfo;
+	if (tok.parse(token,tinfo) != UserToken::valid) return sendInvalidToken(req);
+	UserProfile prof = us.loadProfile(tinfo.userId);
+	if (Value(prof)["public"]["roles"].indexOf("_admin") == Value::npos)
+		return req.setError(403,"Forbidden");
+	UserID uid = us.findUser(userid);
+	if (uid.empty()) return req.setError(404,"Not found");
+	prof = us.loadProfile(uid);
+	req.setResult(prof["public"]);
+}
+
+void RpcInterface::rpcAdminUpdateAccount(RpcRequest req) {
+	if (!req.checkArgs({"string", "string", JSON({"%":"any"})})) {
+		return req.setArgError();
+	}
+	auto args = req.getArgs();
+	StrViewA token = args[0].getString();
+	StrViewA userid = args[1].getString();
+	Value update = args[2];
+	UserToken::Info tinfo;
+	if (tok.parse(token,tinfo) != UserToken::valid) return sendInvalidToken(req);
+	UserProfile prof = us.loadProfile(tinfo.userId);
+	if (Value(prof)["public"]["roles"].indexOf("_admin") == Value::npos)
+		return req.setError(403,"Forbidden");
+	UserID uid = us.findUser(userid);
+	if (uid.empty()) return req.setError(404,"Not found");
+	prof = us.loadProfile(uid);
+	prof = Value(prof).merge(Object("public",update));
+	us.storeProfile(prof);
+	req.setResult(Value(prof)["public"]);
+}
+
 
 }
+

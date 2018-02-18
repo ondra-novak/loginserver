@@ -5,6 +5,7 @@
  *      Author: ondra
  */
 
+#include <couchit/query.h>
 #include <server/user_services.h>
 #include <openssl/hmac.h>
 #include <random>
@@ -13,8 +14,26 @@ namespace loginsrv {
 
 static const int saltLen = 16;
 
+
+StrViewA findUserDesignDoc = R"json({
+	"_id":"_design/users",
+	"language":"javascript",
+	"views":{
+		"find_login":{
+			"map":function(doc) {
+				if (doc.public.email) emit(doc.public.email, null);
+				if (doc.public.alias) emit(doc.public.alias, null);
+			}
+		}
+	}
+})json";
+View findUserView("_design/users/_view/find_login", View::update);
+
 UserServices::UserServices(CouchDB &db):db(db) {
 	CouchDB::fldTimestamp = "tm_modified";
+
+	db.putDesignDocument(findUserDesignDoc.data,findUserDesignDoc.length);
+	nextUserIsAdmin = Result(db.createQuery(findUserView).limit(0).exec()).getTotal() == 0;
 }
 
 String generateSalt() {
@@ -25,6 +44,10 @@ String generateSalt() {
 		return saltLen;
 	});
 
+}
+
+bool UserProfile::hasPassword() const {
+	return this->operator []("password").defined();
 }
 
 Value UserProfile::calculatePasswordDigest(const StrViewA &salt, const StrViewA &password) {
@@ -141,30 +164,30 @@ UserProfile::TryResult UserProfile::tryAcccessCode(String purpose, String code) 
 
 
 UserProfile UserServices::createUser(const StrViewA& email) {
-	String userTag({"user:",email});
-	UserID userId ( db.genUID());
-	Document userReg;
-	userReg.setID(userTag);
-	userReg.set("profile", userId);
-	db.put(userReg);
+	UserID user = findUser(email);
+	if (!user.empty()) throw UserAlreadyExists();
 
 	time_t now;
 	time(&now);
 
+	Value roles;
+	if (nextUserIsAdmin) roles = Value(json::array, {"_admin"});
+	else roles = json::array;
+	nextUserIsAdmin = false;
 
-	UserProfile profile;
-	profile.setID(userId);
+	UserProfile profile ( db.newDocument());
 	profile
 		   ("tm_created",(std::size_t)now)
-		   ("public",Object("state","new")("email", email));
+		   ("public",Object("state","new")("email", email)("alias", nullptr)("roles",roles));
 	profile.enableTimestamp();
 	return profile;
 }
 
 UserID UserServices::findUser(const StrViewA& email) const {
-	String userTag({"user:",email});
-	Value doc = db.get(userTag,CouchDB::flgNullIfMissing);
-	return UserID(doc["profile"]);
+	Query q = db.createQuery(findUserView);
+	Result res = q.key(email).exec();
+	if (res.empty()) return String();
+	else return Row(res[0]).id;
 }
 
 UserProfile UserServices::loadProfile(const UserID& user) {

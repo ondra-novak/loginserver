@@ -17,12 +17,14 @@ public:
 	static const unsigned int expireAccountCreate = 3*24*60*60;//3 days
 
 	typedef std::function<void(StrViewA,StrViewA, Value)> SendMailFn; //template, email,data
+	typedef std::function<bool(StrViewA)> CaptchaFn; //template, email,data
 
 	RpcInterface (UserServices &us,
 				  UserToken &tok,
 				  const SendMailFn &mail,
+				  const CaptchaFn &captcha,
 				  const Value &configObj)
-			:us(us),tok(tok),mail(mail),configObj(configObj) {}
+			:us(us),tok(tok),mail(mail),captcha(captcha),configObj(configObj) {}
 
 	void registerMethods(RpcServer &srv);
 
@@ -40,13 +42,17 @@ public:
 	void rpcLoadAccount(RpcRequest req);
 	void rpcSaveAccount(RpcRequest req);
 	void rpcGetPublicKey(RpcRequest req);
+	void rpcAdminLoadAccount(RpcRequest req);
+	void rpcAdminUpdateAccount(RpcRequest req);
 
 
 protected:
 	UserServices &us;
 	UserToken &tok;
 	SendMailFn mail;
+	CaptchaFn captcha;
 	Value configObj;
+	bool firstUser;
 
 private:
 	void sendInvalidToken(json::RpcRequest req);

@@ -39,6 +39,7 @@ public:
 	void setPassword(const StrViewA &password);
 	void enableOTP(const String &secret);
 	void disableOTP();
+	bool hasPassword() const;
 
 	String genAccessCode(String purpose, std::size_t expire_tm);
 
@@ -71,6 +72,12 @@ public:
 
 protected:
 	CouchDB &db;
+	bool nextUserIsAdmin;
+};
+
+class UserAlreadyExists: public std::exception {
+public:
+	const char *what() const noexcept(true) {return "user already exists";};
 };
 
 } /* namespace loginsrv */

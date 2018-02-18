@@ -113,8 +113,9 @@ int main(int argc, char **argv) {
 	auto loginCfg = config["login"];
 	Value privateKey = loginCfg.mandatory["private_key"].getString();
 	std::string userConfig = loginCfg.mandatory["user_config"].getPath();
-	std::string sendCmd = loginCfg.mandatory["mail_svc"].getString();
+	std::string sendCmd = loginCfg.mandatory["mail_svc"].getPath();
 	std::string templatePrefix = loginCfg["mail_template_prefix"].getString();
+	std::string captcha = loginCfg["captcha_svc"].getPath();
 
 
 	Value userConfigJson = readUserConfig(userConfig);
@@ -128,15 +129,38 @@ int main(int argc, char **argv) {
 				("recepient", email)
 				("data", payload);
 		ondra_shared::logDebug("Send mail: $1 - $2", sendCmd, req.toString());
-		FILE *f = popen(sendCmd.c_str(),"w");
-		if (f == nullptr) {
-			ondra_shared::logError("Cannot execute command: $1",sendCmd);
-		} else {
-			req.toFile(f);
-			int res = pclose(f);
-			if (res) ondra_shared::logError("Unexpected exit status for command: $1 - exit $2",sendCmd, res);
+		if (!sendCmd.empty()) {
+			FILE *f = popen(sendCmd.c_str(),"w");
+			if (f == nullptr) {
+				ondra_shared::logError("Cannot execute command: $1",sendCmd);
+			} else {
+				req.toFile(f);
+				fputs("\n",f);
+				int res = pclose(f);
+				if (res) ondra_shared::logError("Unexpected exit status for command: $1 - exit $2",sendCmd, res);
+			}
 		}
-		}, userConfigJson);
+		},[=](StrViewA str) -> bool {
+			ondra_shared::logDebug("Check captcha: $1 - $2", captcha, str);
+			if (!captcha.empty()) {
+				FILE *f = popen(captcha.c_str(),"w");
+				if (f == nullptr) {
+					ondra_shared::logError("Cannot execute command: $1",captcha);
+					return false;
+				} else {
+					fwrite(str.data,str.length,1,f);
+					fputs("\n",f);
+					int res = pclose(f);
+					return res == 0;
+				}
+			}
+
+
+		},
+
+
+
+		userConfigJson);
 
 	ifc.registerMethods(server);
 
