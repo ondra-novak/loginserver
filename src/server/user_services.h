@@ -34,11 +34,34 @@ public:
 	using Document::Document;
 
 	bool checkPassword(const StrViewA &password);
-	bool checkOTP(unsigned int otpCode);
 
 	void setPassword(const StrViewA &password);
-	void enableOTP(const String &secret);
-	void disableOTP();
+	///Sets OTP
+	/**
+	 * Sets new OTP params. If there is an active OTP, function fails
+	 *
+	 * @param type either "totp" or "hotp"
+	 * @return secret in binary form. Function returns an empty view in case of failure
+	 */
+	BinaryView setOTP(StrViewA type);
+	///Enables or disables OTP
+	/**
+	 * Function just manipulates with isOTPEnabled. Event if OTP is disabled, checkOTP
+	 * is still works
+	 *
+	 */
+	void enableOTP(bool enable);
+	///Determines whether OTP is enabled
+	bool isOTPEnabled() const;
+	///Checks OTP code
+	/**
+	 *
+	 * @param code code to check
+	 * @retval false failure
+	 * @retval true succes (match). The profile MUST be saved after successuly check
+	 */
+	bool checkOTP(unsigned int code);
+
 	bool hasPassword() const;
 
 	String genAccessCode(String purpose, std::size_t expire_tm);

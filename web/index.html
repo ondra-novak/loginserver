@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+<script src='https://www.google.com/recaptcha/api.js'></script>
+</head>
+<body>
+<div class="g-recaptcha" data-sitekey="6Lem8UYUAAAAAB8YThTYDws-oR0JIvbPUwPbB85S"></div>
+<textarea rows="10" cols="10" style="width:100%" id="response"></textarea>
+<script>
+
+
+
+var interval = setInterval(function(){
+	response.value = window["g-recaptcha-response"].value;
+	if (response.value != "") {
+		clearInterval(interval);
+	}
+},1000);
+
+</script>
+</body>
+</html>

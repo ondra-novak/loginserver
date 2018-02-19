@@ -6,6 +6,7 @@
  */
 
 #include <couchit/query.h>
+#include <google_otp/ga.h>
 #include <server/user_services.h>
 #include <openssl/hmac.h>
 #include <random>
@@ -92,16 +93,7 @@ bool UserProfile::checkPassword(const StrViewA& password) {
 
 }
 
-bool UserProfile::checkOTP(unsigned int otpCode) {
-return false;
-}
 
-
-void UserProfile::enableOTP(const String& secret) {
-}
-
-void UserProfile::disableOTP() {
-}
 
 String UserProfile::genAccessCode(String purpose, std::size_t expire_tm) {
 
@@ -198,7 +190,59 @@ void UserServices::storeProfile( UserProfile& profile) {
 	db.put(profile);
 }
 
+BinaryView UserProfile::setOTP(StrViewA type) {
+
+	if (isOTPEnabled()) return BinaryView();
+
+	auto otpsect = object("otp");
+	unsigned char bits[10];
+	std::random_device rnd;
+	std::uniform_int_distribution<unsigned char> dist(0,255);
+	for (unsigned int i = 0; i < 10; i++) bits[i] = dist(rnd);
+	BinaryView secret(bits,10);
+	otpsect.set("secret",Value(secret, base64));
+	otpsect.unset("counter");
+	otpsect.unset("history");
+	otpsect.unset("enabled");
+	otpsect.set("type",type);
+	return secret;
+}
+
+void UserProfile::enableOTP(bool enable) {
+	auto otpsect = object("otp");
+	otpsect.set("enabled",enable);
+}
+
+bool UserProfile::isOTPEnabled() const {
+	Value enabled = (*this)["otp"]["enabled"];
+	return enabled.getBool();
+}
+
+bool UserProfile::checkOTP(unsigned int otpCode) {
+
+	auto otpsect = object("otp");
+	auto history = otpsect.array("history");
+	for (auto v: history) if (v.getUInt() == otpCode) return false;
+
+	StrViewA type = otpsect["type"].getString();
+	if (type == "totp") {
+		Binary secret = otpsect["secret"].getBinary(base64);
+		GoogleOTP otp(secret);
+		if (!otp.checkTimeCode(otpCode,2)) return false;
+		history.push_back(otpCode);
+		if (history.size() > 4) history.erase(0);
+		return true;
+	} else if (type == "hotp") {
+		Binary secret = otpsect["secret"].getBinary(base64);
+		unsigned int counter = otpsect["counter"].getUInt();
+		GoogleOTP otp(secret);
+		if (!otp.checkCode(counter, otpCode, 10)) return false;
+		otpsect.set("counter", counter);
+		return true;
+	} else {
+		return false;
+	}
+}
 
 
 } /* namespace loginsrv */
-

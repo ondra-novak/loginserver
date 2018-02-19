@@ -44,6 +44,8 @@ public:
 	void rpcGetPublicKey(RpcRequest req);
 	void rpcAdminLoadAccount(RpcRequest req);
 	void rpcAdminUpdateAccount(RpcRequest req);
+	void rpcUserPrepareOTP(RpcRequest req);
+	void rpcUserEnableOTP(RpcRequest req);
 
 
 protected:

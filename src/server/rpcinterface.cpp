@@ -1,4 +1,10 @@
+#include <google_otp/base32.h>
+#include <sstream>
 #include "rpcinterface.h"
+
+#include "shared/vla.h"
+
+using ondra_shared::VLA;
 
 namespace loginsrv {
 
@@ -13,8 +19,10 @@ void RpcInterface::registerMethods(RpcServer& srv) {
 	srv.add("User.setPassword",this,&RpcInterface::rpcSetPassword);
 	srv.add("User.resetPassword",this,&RpcInterface::rpcResetPassword);
 	srv.add("User.requestResetPassword",this,&RpcInterface::rpcRequestResetPassword);
-	srv.add("Account.load",this,&RpcInterface::rpcLoadAccount);
-	srv.add("Account.update",this,&RpcInterface::rpcSaveAccount);
+	srv.add("User.prepareOTP",this,&RpcInterface::rpcUserPrepareOTP);
+	srv.add("User.enableOTP",this,&RpcInterface::rpcUserEnableOTP);
+	srv.add("User.loadProfile",this,&RpcInterface::rpcLoadAccount);
+	srv.add("User.updateProfile",this,&RpcInterface::rpcSaveAccount);
 	srv.add("Token.parse",this,&RpcInterface::rpcTokenParse);
 	srv.add("Token.refresh",this,&RpcInterface::rpcTokenRefresh);
 	srv.add("Token.revokeAll",this,&RpcInterface::rpcTokenRevokeAll);
@@ -173,7 +181,48 @@ void RpcInterface::rpcSaveAccount(RpcRequest req) {
 	req.setResult(Value(p)["public"]);
 }
 
+void RpcInterface::rpcUserPrepareOTP(RpcRequest req) {
+	static Value argdef = Value::fromString(R"(["string",["'totp","'hotp"]])");
+	if (!req.checkArgs(argdef)) return req.setArgError();
+	StrViewA token = req.getArgs()[0].getString();
+	UserToken::Info tinfo;
+	if (!tok.parse(token,tinfo)) return sendInvalidToken(req);
 
+	StrViewA type = req.getArgs()[1].getString();
+	UserProfile prof = us.loadProfile(tinfo.userId);
+	BinaryView bin = prof.setOTP(type);
+	us.storeProfile(prof);
+
+	VLA<char, 100> secret((bin.length+4)*5/8);
+	base32_encode(bin.data, bin.length, reinterpret_cast<uint8_t *>(secret.data), secret.length);
+
+	std::ostringstream urlbuff;
+	urlbuff << "otpauth://" << type << "/" << "issuer" << "?secret=" << StrViewA(secret);
+	if (type=="hotp") urlbuff << "&counter=0";
+	req.setResult(urlbuff.str());
+
+}
+
+void RpcInterface::rpcUserEnableOTP(RpcRequest req) {
+	static Value argdef = Value::fromString(R"(["string","number","boolean"])");
+	if (!req.checkArgs(argdef)) return req.setArgError();
+
+	StrViewA token = req.getArgs()[0].getString();
+	std::size_t code = req.getArgs()[1].getUInt();
+	bool enable  = req.getArgs()[1].getBool();
+	UserToken::Info tinfo;
+	if (!tok.parse(token,tinfo)) return sendInvalidToken(req);
+
+	UserProfile prof = us.loadProfile(tinfo.userId);
+	if (prof.isOTPEnabled() == enable) return req.setResult(true);
+
+	if (!prof.checkOTP(code)) return req.setError(401,"Invalid OTP code");
+
+	prof.enableOTP(enable);
+
+
+
+}
 
 void RpcInterface::sendInvalidToken(RpcRequest req) {
 	return req.setError(402, "Invalid token");
