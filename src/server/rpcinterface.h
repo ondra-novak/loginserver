@@ -11,20 +11,53 @@ namespace loginsrv {
 
 using namespace json;
 
+
+
+
 class RpcInterface{
 public:
 
+
+	class IServices {
+	public:
+		virtual ~IServices() {}
+		///Formatting and mailing service
+		/**
+		 * @param email target e-mail (recepient)
+		 * @param templateName name of the template
+		 * @param templateData data of the template
+		 */
+		virtual void sendMail(const StrViewA email,
+				const StrViewA templateName,
+				const Value &templateData) = 0;
+		///Verifies the captcha
+		/**
+		 * @param response captcha response sent by the user
+		 * @retval true captcha verified successfully
+		 * @retval false verification failed.
+		 */
+		virtual bool verifyCaptcha(const StrViewA response) = 0;
+
+		///Generates label for OTP.
+		/**
+		 * @param profile user's profile
+		 * @return OTP label
+		 */
+		virtual String getOTPLabel(const UserProfile &profile)  = 0;
+
+		virtual unsigned int getCodeExpirationSec() = 0;
+
+		virtual Value getUserConfig(const StrViewA key) = 0;
+	};
+
+
 	static const unsigned int expireAccountCreate = 3*24*60*60;//3 days
 
-	typedef std::function<void(StrViewA,StrViewA, Value)> SendMailFn; //template, email,data
-	typedef std::function<bool(StrViewA)> CaptchaFn; //template, email,data
 
 	RpcInterface (UserServices &us,
 				  UserToken &tok,
-				  const SendMailFn &mail,
-				  const CaptchaFn &captcha,
-				  const Value &configObj)
-			:us(us),tok(tok),mail(mail),captcha(captcha),configObj(configObj) {}
+				  IServices &svc);
+
 
 	void registerMethods(RpcServer &srv);
 
@@ -51,9 +84,7 @@ public:
 protected:
 	UserServices &us;
 	UserToken &tok;
-	SendMailFn mail;
-	CaptchaFn captcha;
-	Value configObj;
+	IServices &svc;
 	bool firstUser;
 
 private:

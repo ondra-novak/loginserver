@@ -24,10 +24,23 @@
 
 using ondra_shared::StdLogFile;
 using ondra_shared::IniConfig;
+using ondra_shared::StrViewA;
 using namespace couchit;
 using namespace json;
 using namespace simpleServer;
 using namespace loginsrv;
+
+static Value customRules = json::Value::fromString(R"json(
+{
+"Email":["split","@",[[2],"Username","Domain"],2],
+"Username":"[a-z-A-Z.0-9_+\"],
+"Domain":["split",".",[[],["all","[a-z-0-9]",["minsize",1]]]],
+"Token":["split",".",[[2],"Base64url","Base64url"],2],
+"Base64url":"[a-zA-Z0-9-_]",
+"Code":["split","-",[[],"digits"]],
+}
+
+)json");
 
 
 static Value readUserConfig(const std::string &name) {
@@ -45,6 +58,104 @@ static Value readUserConfig(const std::string &name) {
 		throw std::runtime_error(error);
 	}
 }
+
+
+class Svcs: public RpcInterface::IServices {
+public:
+	Svcs(
+			const std::string &templatePrefix,
+			const std::string &sendCmd,
+			const std::string &captchaCmd,
+			const std::string &otpissuer,
+			const Value &usercfg
+		):templatePrefix(templatePrefix)
+		,sendCmd(sendCmd)
+		,captchaCmd(captchaCmd)
+		,otpissuer(otpissuer)
+		,usercfg(usercfg) {}
+
+	virtual void sendMail(const StrViewA email,
+			const StrViewA templateName,
+			const Value &templateData) override;
+
+
+
+	virtual bool verifyCaptcha(const StrViewA response)override;
+
+	virtual String getOTPLabel(const UserProfile &profile)override;
+
+	virtual unsigned int getCodeExpirationSec()override;
+
+
+	virtual Value getUserConfig(const StrViewA key) override;
+protected:
+
+	std::string templatePrefix;
+	std::string sendCmd;
+	std::string captchaCmd;
+	std::string otpissuer;
+	Value usercfg;
+
+
+};
+
+void Svcs::sendMail(const StrViewA email,
+		const StrViewA templateName,
+		const Value &templateData) {
+
+	Value req = Object("template",String({templatePrefix,templateName}))
+			("recepient", email)
+			("data", templateData);
+	ondra_shared::logDebug("Send mail: $1 - $2", sendCmd, req.toString());
+	if (!sendCmd.empty()) {
+		FILE *f = popen(sendCmd.c_str(),"w");
+		if (f == nullptr) {
+			ondra_shared::logError("Cannot execute command: $1",sendCmd);
+		} else {
+			req.toFile(f);
+			fputs("\n",f);
+			int res = pclose(f);
+			if (res) ondra_shared::logError("Unexpected exit status for command: $1 - exit $2",sendCmd, res);
+		}
+	}
+}
+
+
+
+bool Svcs::verifyCaptcha(const StrViewA response) {
+
+	ondra_shared::logDebug("Check captcha: $1 - $2", captchaCmd, response);
+	if (!captchaCmd.empty()) {
+		FILE *f = popen(captchaCmd.c_str(),"w");
+		if (f == nullptr) {
+			ondra_shared::logError("Cannot execute command: $1",captchaCmd);
+			return false;
+		} else {
+			fwrite(response.data,response.length,1,f);
+			fputs("\n",f);
+			int res = pclose(f);
+			return res == 0;
+		}
+	}
+	return true;
+
+}
+
+String Svcs::getOTPLabel(const UserProfile &profile) {
+	return String(StrViewA(otpissuer));
+
+}
+unsigned int Svcs::getCodeExpirationSec() {
+	return 3*24*60*60;
+}
+
+Value Svcs::getUserConfig(const StrViewA key) {
+	Value c = usercfg[key];
+	if (c.defined()) return c;
+	return usercfg[""];
+}
+
+
 
 
 int main(int argc, char **argv) {
@@ -116,52 +227,25 @@ int main(int argc, char **argv) {
 	std::string sendCmd = loginCfg.mandatory["mail_svc"].getPath();
 	std::string templatePrefix = loginCfg["mail_template_prefix"].getString();
 	std::string captcha = loginCfg["captcha_svc"].getPath();
+	std::string otpIssuer = loginCfg.mandatory["otp_issuer"].getString();
 
 
 	Value userConfigJson = readUserConfig(userConfig);
+
+
 
 	UserToken tok(Token::privateKey, String(privateKey));
 	tok.setExpireTime(loginCfg.mandatory["token_expiration"].getUInt());
 	tok.setRefreshExpireTime(loginCfg.mandatory["token_refresh_expiration"].getUInt());
 	UserServices us(couchdb);
-	RpcInterface ifc(us, tok, [=](StrViewA templt,StrViewA email, Value payload){
-		Value req = Object("template",String({templatePrefix,templt}))
-				("recepient", email)
-				("data", payload);
-		ondra_shared::logDebug("Send mail: $1 - $2", sendCmd, req.toString());
-		if (!sendCmd.empty()) {
-			FILE *f = popen(sendCmd.c_str(),"w");
-			if (f == nullptr) {
-				ondra_shared::logError("Cannot execute command: $1",sendCmd);
-			} else {
-				req.toFile(f);
-				fputs("\n",f);
-				int res = pclose(f);
-				if (res) ondra_shared::logError("Unexpected exit status for command: $1 - exit $2",sendCmd, res);
-			}
-		}
-		},[=](StrViewA str) -> bool {
-			ondra_shared::logDebug("Check captcha: $1 - $2", captcha, str);
-			if (!captcha.empty()) {
-				FILE *f = popen(captcha.c_str(),"w");
-				if (f == nullptr) {
-					ondra_shared::logError("Cannot execute command: $1",captcha);
-					return false;
-				} else {
-					fwrite(str.data,str.length,1,f);
-					fputs("\n",f);
-					int res = pclose(f);
-					return res == 0;
-				}
-			}
+	Svcs ifcsvc(templatePrefix,sendCmd,captcha,otpIssuer,userConfigJson);
 
 
-		},
+	RpcInterface ifc(us, tok, ifcsvc);
 
 
 
-		userConfigJson);
-
+	server.setCustomValidationRules(customRules);
 	ifc.registerMethods(server);
 
 

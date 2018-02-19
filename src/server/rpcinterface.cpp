@@ -8,7 +8,12 @@ using ondra_shared::VLA;
 
 namespace loginsrv {
 
-#define JSON(...) #__VA_ARGS__
+
+
+RpcInterface::RpcInterface(UserServices& us, UserToken& tok, IServices& svc)
+	:us(us),tok(tok),svc(svc),firstUser(false)
+{
+}
 
 
 void RpcInterface::registerMethods(RpcServer& srv) {
@@ -29,18 +34,19 @@ void RpcInterface::registerMethods(RpcServer& srv) {
 	srv.add("Token.getPublicKey",this,&RpcInterface::rpcGetPublicKey);
 	srv.add("Admin.loadAccount",this,&RpcInterface::rpcAdminLoadAccount);
 	srv.add("Admin.updateAccount",this,&RpcInterface::rpcAdminUpdateAccount);
+	srv.add("Admin.updateAccount",this,&RpcInterface::rpcAdminUpdateAccount);
 
 }
 
 void RpcInterface::rpcRegisterUser(RpcRequest req) {
-	static Value argdef = Value::fromString(R"([{"email":"string", "captcha":["string","optional"]}])");
+	static Value argdef = Value::fromString(R"([{"email":["Email", "captcha":["string","optional"]}])");
 	if (!req.checkArgs({argdef})) {
 		return req.setArgError();
 	}
 	auto args = req.getArgs()[0];
 	StrViewA email = args["email"].getString();
 	StrViewA c = args["captcha"].getString();
-	if (!captcha(c)) {
+	if (!svc.verifyCaptcha(c)) {
 		return req.setError(402, "Captcha challenge failed");
 	}
 	UserID id = us.findUser(email);
@@ -56,7 +62,7 @@ void RpcInterface::rpcRegisterUser(RpcRequest req) {
 	}
 	String code = prof.genAccessCode("resetpwd", expireAccountCreate);
 	us.storeProfile(prof);
-	mail("register", email, Object("code", code));
+	svc.sendMail( email, "register",Object("code", code));
 	req.setResult(true);
 }
 
@@ -82,7 +88,7 @@ void RpcInterface::rpcGetPublicKey(RpcRequest req) {
 }
 
 void RpcInterface::rpcResetPassword(RpcRequest req) {
-	if (!req.checkArgs({Object("email","string")("code","string")("password","string")})) {
+	if (!req.checkArgs({Object("email","Email")("code","Code")("password","string")})) {
 		return req.setArgError();
 	}
 	auto args = req.getArgs()[0];
@@ -97,7 +103,7 @@ void RpcInterface::rpcResetPassword(RpcRequest req) {
 	if (tr == UserProfile::accepted) {
 		prof.setPassword(pwd);
 		req.setResult(true);
-		if (sendWarn) mail("pwdchanged",email,Object());
+		if (sendWarn) svc.sendMail(email,"pwdchanged",Object());
 	} else if (tr == UserProfile::invalid) {
 			return req.setError(410,"Gone");
 	} else {
@@ -108,14 +114,14 @@ void RpcInterface::rpcResetPassword(RpcRequest req) {
 
 
 void RpcInterface::rpcRequestResetPassword(RpcRequest req) {
-	static Value argdef = Value::fromString(R"([{"email":"string", "captcha":["string","optional"]}])");
+	static Value argdef = Value::fromString(R"([{"email":"Email", "captcha":["string","optional"]}])");
 	if (!req.checkArgs(argdef)) {
 		return req.setArgError();
 	}
 	auto args = req.getArgs()[0];
 	StrViewA email = args["email"].getString();
 	StrViewA c = args["captcha"].getString();
-	if (!captcha(c)) {
+	if (!svc.verifyCaptcha(c)) {
 		return req.setError(402, "Captcha challenge failed");
 	}
 	UserID id = us.findUser(email);
@@ -123,7 +129,7 @@ void RpcInterface::rpcRequestResetPassword(RpcRequest req) {
 	UserProfile prof = us.loadProfile(id);
 	String code = prof.genAccessCode("resetpwd", expireAccountCreate);
 	us.storeProfile(prof);
-	mail("resetpwd",email,Object("code", code));
+	svc.sendMail(email,"resetpwd",Object("code", code));
 
 	req.setResult(true);
 }
@@ -144,7 +150,7 @@ void RpcInterface::rpcGetAccountName(RpcRequest req) {
 }
 
 void RpcInterface::rpcLoadAccount(RpcRequest req) {
-	if (!req.checkArgs({"string"})) {
+	if (!req.checkArgs({"Token"})) {
 		return req.setArgError();
 	}
 	auto args = req.getArgs();
@@ -156,7 +162,7 @@ void RpcInterface::rpcLoadAccount(RpcRequest req) {
 }
 
 void RpcInterface::rpcSaveAccount(RpcRequest req) {
-	if (!req.checkArgs({"string", Object("%","any")})) {
+	if (!req.checkArgs({"Token", Object("%","any")})) {
 		return req.setArgError();
 	}
 	auto args = req.getArgs();
@@ -182,7 +188,7 @@ void RpcInterface::rpcSaveAccount(RpcRequest req) {
 }
 
 void RpcInterface::rpcUserPrepareOTP(RpcRequest req) {
-	static Value argdef = Value::fromString(R"(["string",["'totp","'hotp"]])");
+	static Value argdef = Value::fromString(R"(["Token",["'totp","'hotp"]])");
 	if (!req.checkArgs(argdef)) return req.setArgError();
 	StrViewA token = req.getArgs()[0].getString();
 	UserToken::Info tinfo;
@@ -204,7 +210,7 @@ void RpcInterface::rpcUserPrepareOTP(RpcRequest req) {
 }
 
 void RpcInterface::rpcUserEnableOTP(RpcRequest req) {
-	static Value argdef = Value::fromString(R"(["string","number","boolean"])");
+	static Value argdef = Value::fromString(R"(["Token","number","boolean"])");
 	if (!req.checkArgs(argdef)) return req.setArgError();
 
 	StrViewA token = req.getArgs()[0].getString();
@@ -229,7 +235,7 @@ void RpcInterface::sendInvalidToken(RpcRequest req) {
 }
 
 void RpcInterface::rpcTokenParse(RpcRequest req) {
-	if (!req.checkArgs({"string"})) {
+	if (!req.checkArgs({"Token"})) {
 		return req.setArgError();
 	}
 	StrViewA token = req.getArgs()[0].getString();
@@ -259,7 +265,7 @@ void RpcInterface::rpcTokenParse(RpcRequest req) {
 }
 
 void RpcInterface::rpcTokenRefresh(RpcRequest req) {
-	if (!req.checkArgs({"string"})) {
+	if (!req.checkArgs({"Token"})) {
 		return req.setArgError();
 	}
 	StrViewA token = req.getArgs()[0].getString();
@@ -286,7 +292,7 @@ void RpcInterface::rpcLogin(RpcRequest req) {
 	static Value argDef = Value::fromString(
 	 "[{\"user\":\"string\","
 	 "\"password\":\"string\","
-	 "\"otp\":[\"string\",\"optional\"],"
+	 "\"otp\":[\"number\",\"optional\"],"
 	 "\"keep\":[\"boolean\",\"optional\"]}]");
 
 	if (!req.checkArgs(argDef)) {
@@ -308,10 +314,7 @@ void RpcInterface::rpcLogin(RpcRequest req) {
 			if (!remember) tnfo.refreshExpireTime = tnfo.expireTime;
 			String token = tok.create(tnfo);
 			String choosenConfig (prof["config"]);
-			Value cfg = configObj[choosenConfig];
-			if (!cfg.defined()) {
-				cfg = configObj[""];
-			}
+			Value cfg = svc.getUserConfig(choosenConfig);
 
 			Object res;
 			res("token", token)
@@ -328,7 +331,7 @@ void RpcInterface::rpcLogin(RpcRequest req) {
 }
 
 void RpcInterface::rpcSetPassword(RpcRequest req) {
-	if (!req.checkArgs({"string","string","string"})) {
+	if (!req.checkArgs({"Token","string","string"})) {
 		return req.setArgError();
 	}
 	Value args = req.getArgs();
@@ -344,13 +347,13 @@ void RpcInterface::rpcSetPassword(RpcRequest req) {
 	} else {
 		prof.setPassword(password);
 		us.storeProfile(prof);
-		mail("pwdchanged",prof["public"]["email"].getString(),Object());
+		svc.sendMail(prof["public"]["email"].getString(),"pwdchanged",Object());
 		req.setResult(true);
 	}
 }
 
 void RpcInterface::rpcAdminLoadAccount(RpcRequest req) {
-	if (!req.checkArgs({"string","string"})) {
+	if (!req.checkArgs({"Token","string"})) {
 		return req.setArgError();
 	}
 	auto args = req.getArgs();
@@ -364,13 +367,18 @@ void RpcInterface::rpcAdminLoadAccount(RpcRequest req) {
 	UserID uid = us.findUser(userid);
 	if (uid.empty()) return req.setError(404,"Not found");
 	prof = us.loadProfile(uid);
-	req.setResult(prof["public"]);
+	req.setResult(Value(prof).replace("_id",json::undefined).replace("_rev",json::undefined));
 }
 
 void RpcInterface::rpcAdminUpdateAccount(RpcRequest req) {
-	if (!req.checkArgs({"string", "string", JSON({"%":"any"})})) {
-		return req.setArgError();
-	}
+	static Value argdef = Value::fromString(
+	R"json(["string","Token",{
+			"_id":"undefined",
+			"_rev":"undefined",
+			"%":"any		
+	})json");
+	if (!req.checkArgs(argdef)) return req.setArgError();
+
 	auto args = req.getArgs();
 	StrViewA token = args[0].getString();
 	StrViewA userid = args[1].getString();
@@ -390,4 +398,3 @@ void RpcInterface::rpcAdminUpdateAccount(RpcRequest req) {
 
 
 }
-
