@@ -43,7 +43,7 @@ public:
 	 * @param type either "totp" or "hotp"
 	 * @return secret in binary form. Function returns an empty view in case of failure
 	 */
-	BinaryView setOTP(StrViewA type);
+	Binary setOTP(StrViewA type);
 	///Enables or disables OTP
 	/**
 	 * Function just manipulates with isOTPEnabled. Event if OTP is disabled, checkOTP
@@ -61,6 +61,16 @@ public:
 	 * @retval true succes (match). The profile MUST be saved after successuly check
 	 */
 	bool checkOTP(unsigned int code);
+
+	///checks for the first code
+	/**
+	 * @param code code
+	 * @retval 0 invalid code
+	 * @retval >0 current counter value (to help with recorvery)
+	 */
+	unsigned int checkOTPFirstCode(unsigned int code);
+
+	Value getHOTPInfo() const;
 
 	bool hasPassword() const;
 

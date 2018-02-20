@@ -26,6 +26,8 @@ void RpcInterface::registerMethods(RpcServer& srv) {
 	srv.add("User.requestResetPassword",this,&RpcInterface::rpcRequestResetPassword);
 	srv.add("User.prepareOTP",this,&RpcInterface::rpcUserPrepareOTP);
 	srv.add("User.enableOTP",this,&RpcInterface::rpcUserEnableOTP);
+	srv.add("User.checkOTP",this,&RpcInterface::rpcUserCheckOTP);
+	srv.add("User.verifyOTP",this,&RpcInterface::rpcUserVerifyOTP);
 	srv.add("User.loadProfile",this,&RpcInterface::rpcLoadAccount);
 	srv.add("User.updateProfile",this,&RpcInterface::rpcSaveAccount);
 	srv.add("Token.parse",this,&RpcInterface::rpcTokenParse);
@@ -34,12 +36,11 @@ void RpcInterface::registerMethods(RpcServer& srv) {
 	srv.add("Token.getPublicKey",this,&RpcInterface::rpcGetPublicKey);
 	srv.add("Admin.loadAccount",this,&RpcInterface::rpcAdminLoadAccount);
 	srv.add("Admin.updateAccount",this,&RpcInterface::rpcAdminUpdateAccount);
-	srv.add("Admin.updateAccount",this,&RpcInterface::rpcAdminUpdateAccount);
 
 }
 
 void RpcInterface::rpcRegisterUser(RpcRequest req) {
-	static Value argdef = Value::fromString(R"([{"email":"Email", "captcha":["string","optional"]}])");
+	static Value argdef = Value::fromString(R"([{"email":"Email", "captcha":["string","undefined"]}])");
 	if (!req.checkArgs({argdef})) {
 		return req.setArgError();
 	}
@@ -88,7 +89,7 @@ void RpcInterface::rpcGetPublicKey(RpcRequest req) {
 }
 
 void RpcInterface::rpcResetPassword(RpcRequest req) {
-	if (!req.checkArgs({Object("email","Email")("code","Code")("password","string")})) {
+	if (!req.checkArgs({Object("email","Email")("code","Code")("password","Password")})) {
 		return req.setArgError();
 	}
 	auto args = req.getArgs()[0];
@@ -192,18 +193,18 @@ void RpcInterface::rpcUserPrepareOTP(RpcRequest req) {
 	if (!req.checkArgs(argdef)) return req.setArgError();
 	StrViewA token = req.getArgs()[0].getString();
 	UserToken::Info tinfo;
-	if (!tok.parse(token,tinfo)) return sendInvalidToken(req);
+	if (tok.parse(token,tinfo)) return sendInvalidToken(req);
 
 	StrViewA type = req.getArgs()[1].getString();
 	UserProfile prof = us.loadProfile(tinfo.userId);
 	BinaryView bin = prof.setOTP(type);
 	us.storeProfile(prof);
 
-	VLA<char, 100> secret((bin.length+4)*5/8);
+	VLA<char, 100> secret((bin.length*8+4)/5);
 	base32_encode(bin.data, bin.length, reinterpret_cast<uint8_t *>(secret.data), secret.length);
 
 	std::ostringstream urlbuff;
-	urlbuff << "otpauth://" << type << "/" << "issuer" << "?secret=" << StrViewA(secret);
+	urlbuff << "otpauth://" << type << "/" << svc.getOTPLabel(prof) << "?secret=" << StrViewA(secret);
 	if (type=="hotp") urlbuff << "&counter=0";
 	req.setResult(urlbuff.str());
 
@@ -215,9 +216,9 @@ void RpcInterface::rpcUserEnableOTP(RpcRequest req) {
 
 	StrViewA token = req.getArgs()[0].getString();
 	std::size_t code = req.getArgs()[1].getUInt();
-	bool enable  = req.getArgs()[1].getBool();
+	bool enable  = req.getArgs()[2].getBool();
 	UserToken::Info tinfo;
-	if (!tok.parse(token,tinfo)) return sendInvalidToken(req);
+	if (tok.parse(token,tinfo)) return sendInvalidToken(req);
 
 	UserProfile prof = us.loadProfile(tinfo.userId);
 	if (prof.isOTPEnabled() == enable) return req.setResult(true);
@@ -226,7 +227,8 @@ void RpcInterface::rpcUserEnableOTP(RpcRequest req) {
 
 	prof.enableOTP(enable);
 
-
+	us.storeProfile(prof);
+	req.setResult(true);
 
 }
 
@@ -291,7 +293,7 @@ void RpcInterface::rpcTokenRefresh(RpcRequest req) {
 void RpcInterface::rpcLogin(RpcRequest req) {
 	static Value argDef = Value::fromString(
 	 "[{\"user\":\"string\","
-	 "\"password\":\"string\","
+	 "\"password\":\"Password\","
 	 "\"otp\":[\"number\",\"optional\"],"
 	 "\"keep\":[\"boolean\",\"optional\"]}]");
 
@@ -301,7 +303,7 @@ void RpcInterface::rpcLogin(RpcRequest req) {
 	Value args = req.getArgs()[0];
 	StrViewA user = args["user"].getString();
 	StrViewA password = args["password"].getString();
-	StrViewA otp = args["otp"].getString();
+	unsigned int otp = args["otp"].getUInt();
 	bool remember = args["keep"].getBool();
 
 	try {
@@ -309,6 +311,20 @@ void RpcInterface::rpcLogin(RpcRequest req) {
 		UserProfile prof = us.loadProfile(userid);
 		if (prof.checkPassword(password)) {
 
+			if (prof.isOTPEnabled()) {
+				if (otp) {
+					if (!prof.checkOTP(otp)) {
+						Value data;
+						unsigned int cnt = prof.checkOTPFirstCode(otp);
+						if (cnt) data = Object("counter",cnt);
+						req.setError(401,"Invalid credentials",data);
+					} else {
+						us.storeProfile(prof);
+					}
+				} else {
+					req.setError(402,"OTP Required");
+				}
+			}
 			UserToken::Info tnfo;
 			tok.prepare(userid, tnfo);
 			if (!remember) tnfo.refreshExpireTime = tnfo.expireTime;
@@ -396,5 +412,36 @@ void RpcInterface::rpcAdminUpdateAccount(RpcRequest req) {
 	req.setResult(Value(prof)["public"]);
 }
 
+void RpcInterface::rpcUserCheckOTP(RpcRequest req) {
+
+	if (!req.checkArgs({"Token","number"})) return req.setArgError();
+	auto args = req.getArgs();
+	StrViewA token = args[0].getString();
+	unsigned int code = args[1].getUInt();
+	UserToken::Info tinfo;
+	if (tok.parse(token,tinfo)) return sendInvalidToken(req);
+	UserProfile prof = us.loadProfile(UserID(tinfo.userId));
+	if (prof.checkOTP(code)) {
+		us.storeProfile(prof);
+		req.setResult(true);
+	} else {
+		req.setResult(false);
+	}
 
 }
+
+void loginsrv::RpcInterface::rpcUserVerifyOTP(RpcRequest req) {
+	if (!req.checkArgs(Value(json::array,{"Token"}))) return req.setArgError();
+	auto args = req.getArgs();
+	StrViewA token = args[0].getString();
+	UserToken::Info tinfo;
+	if (tok.parse(token,tinfo)) return sendInvalidToken(req);
+	UserProfile prof = us.loadProfile(UserID(tinfo.userId));
+	Value nfo = prof.getHOTPInfo();
+	if (nfo.isNull()) req.setError(404,"No HTOP informations are available");
+	else req.setResult(nfo);
+}
+
+
+}
+

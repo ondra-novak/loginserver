@@ -51,6 +51,7 @@ bool UserProfile::hasPassword() const {
 	return this->operator []("password").defined();
 }
 
+
 Value UserProfile::calculatePasswordDigest(const StrViewA &salt, const StrViewA &password) {
 	BinaryView bsalt(salt);
 	BinaryView bpswd(password);
@@ -190,9 +191,9 @@ void UserServices::storeProfile( UserProfile& profile) {
 	db.put(profile);
 }
 
-BinaryView UserProfile::setOTP(StrViewA type) {
+Binary UserProfile::setOTP(StrViewA type) {
 
-	if (isOTPEnabled()) return BinaryView();
+	if (isOTPEnabled()) return Binary();
 
 	auto otpsect = object("otp");
 	unsigned char bits[10];
@@ -200,12 +201,13 @@ BinaryView UserProfile::setOTP(StrViewA type) {
 	std::uniform_int_distribution<unsigned char> dist(0,255);
 	for (unsigned int i = 0; i < 10; i++) bits[i] = dist(rnd);
 	BinaryView secret(bits,10);
-	otpsect.set("secret",Value(secret, base64));
+	Value vsecret(secret, base64);
+	otpsect.set("secret",vsecret);
 	otpsect.unset("counter");
 	otpsect.unset("history");
 	otpsect.unset("enabled");
 	otpsect.set("type",type);
-	return secret;
+	return vsecret.getBinary(base64);
 }
 
 void UserProfile::enableOTP(bool enable) {
@@ -244,5 +246,35 @@ bool UserProfile::checkOTP(unsigned int otpCode) {
 	}
 }
 
+unsigned int UserProfile::checkOTPFirstCode(unsigned int code) {
+	auto otpsect = object("otp");
+
+	StrViewA type = otpsect["type"].getString();
+	if (type == "hotp") {
+		Binary secret = otpsect["secret"].getBinary(base64);
+		unsigned int counter = otpsect["counter"].getUInt();
+		unsigned int zero = 0;
+		GoogleOTP otp(secret);
+		if (!otp.checkCode(zero, code, 1)) return 0;
+		return counter;
+	} else {
+		return 0;
+	}
+}
+
+Value UserProfile::getHOTPInfo() const {
+	auto otpsect = (*this)["otp"];
+
+	StrViewA type = otpsect["type"].getString();
+	if (type == "hotp") {
+		Binary secret = otpsect["secret"].getBinary(base64);
+		unsigned int counter = otpsect["counter"].getUInt();
+		GoogleOTP otp(secret);
+		return Object("checkNumber",otp.getCode(0))
+					 ("counter", counter);
+	} else {
+		return nullptr;
+	}
+}
 
 } /* namespace loginsrv */

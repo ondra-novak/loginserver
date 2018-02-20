@@ -79,6 +79,8 @@ public:
 	void rpcAdminUpdateAccount(RpcRequest req);
 	void rpcUserPrepareOTP(RpcRequest req);
 	void rpcUserEnableOTP(RpcRequest req);
+	void rpcUserCheckOTP(RpcRequest req);
+	void rpcUserVerifyOTP(RpcRequest req);
 
 
 protected:

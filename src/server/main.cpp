@@ -32,28 +32,17 @@ using namespace loginsrv;
 
 static Value customRules = json::Value::fromString(R"json(
 {
-
-
-
-"Email":["explode","@",[[2],"Username","Domain"],2],
-
-
-
-"Username":["all","[a-z-A-Z.0-9_+\"]",["minsize",1]],
-
-
-
-"Domain":["explode",".",["all",["minsize",2],[[],["all","[a-z-0-9]",["minsize",1]]]]],
-
-
-
-
-"Token":["explode",".",[[2],"Base64url","Base64url"],2],
-"Base64url":"[a-zA-Z0-9-_]",
-"Code":["explode","-",[[],"digits"]]
+"Email":["explode","@",[[2],"Username","Domain"]],
+"Username":"[a-z-A-Z.0-9_+\"]",
+"Domain":["explode",".",[[2],"DomainPart","DomainPart","DomainPArt"]],
+"DomainPart":"[a-z-0-9]",
+"Token":["explode",".",[[2],"base64url","base64url"]],
+"Code":["explode","-",[[2],"digits","digits","digits"]],
+"Password":["minsize",8]
 }
 
 )json");
+
 
 
 static Value readUserConfig(const std::string &name) {
@@ -261,6 +250,7 @@ int main(int argc, char **argv) {
 	server.setCustomValidationRules(customRules);
 	ifc.registerMethods(server);
 
+	server.addPath("/web",HttpFileMapper("web/","index.html"));
 
 	server.start();
 
