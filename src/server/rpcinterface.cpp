@@ -39,7 +39,7 @@ void RpcInterface::registerMethods(RpcServer& srv) {
 }
 
 void RpcInterface::rpcRegisterUser(RpcRequest req) {
-	static Value argdef = Value::fromString(R"([{"email":["Email", "captcha":["string","optional"]}])");
+	static Value argdef = Value::fromString(R"([{"email":"Email", "captcha":["string","optional"]}])");
 	if (!req.checkArgs({argdef})) {
 		return req.setArgError();
 	}

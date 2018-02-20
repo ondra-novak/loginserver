@@ -32,12 +32,25 @@ using namespace loginsrv;
 
 static Value customRules = json::Value::fromString(R"json(
 {
-"Email":["split","@",[[2],"Username","Domain"],2],
-"Username":"[a-z-A-Z.0-9_+\"],
-"Domain":["split",".",[[],["all","[a-z-0-9]",["minsize",1]]]],
-"Token":["split",".",[[2],"Base64url","Base64url"],2],
+
+
+
+"Email":["explode","@",[[2],"Username","Domain"],2],
+
+
+
+"Username":["all","[a-z-A-Z.0-9_+\"]",["minsize",1]],
+
+
+
+"Domain":["explode",".",["all",["minsize",2],[[],["all","[a-z-0-9]",["minsize",1]]]]],
+
+
+
+
+"Token":["explode",".",[[2],"Base64url","Base64url"],2],
 "Base64url":"[a-zA-Z0-9-_]",
-"Code":["split","-",[[],"digits"]],
+"Code":["explode","-",[[],"digits"]]
 }
 
 )json");
