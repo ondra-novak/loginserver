@@ -10,8 +10,8 @@ namespace loginsrv {
 
 
 
-RpcInterface::RpcInterface(UserServices& us, UserToken& tok, IServices& svc)
-	:us(us),tok(tok),svc(svc),firstUser(false)
+RpcInterface::RpcInterface(UserServices& us, UserToken& tok, IServices& svc, const Config &cfg)
+	:us(us),tok(tok),svc(svc),cfg(cfg),firstUser(false)
 {
 }
 
@@ -31,7 +31,7 @@ void RpcInterface::registerMethods(RpcServer& srv) {
 	srv.add("User.loadProfile",this,&RpcInterface::rpcLoadAccount);
 	srv.add("User.updateProfile",this,&RpcInterface::rpcSaveAccount);
 	srv.add("Token.parse",this,&RpcInterface::rpcTokenParse);
-	srv.add("Token.refresh",this,&RpcInterface::rpcTokenRefresh);
+	srv.add("Token.create",this,&RpcInterface::rpcTokenCreate);
 	srv.add("Token.revokeAll",this,&RpcInterface::rpcTokenRevokeAll);
 	srv.add("Token.getPublicKey",this,&RpcInterface::rpcGetPublicKey);
 	srv.add("Admin.loadAccount",this,&RpcInterface::rpcAdminLoadAccount);
@@ -80,8 +80,7 @@ void RpcInterface::rpcTokenRevokeAll(RpcRequest req) {
 	time_t now;time(&now);
 	prof("tokenRevoke", (std::size_t)now);
 	us.storeProfile(prof);
-	tok.prepare(tinfo.userId,tinfo);
-	req.setResult(tok.create(tinfo));
+	req.setResult(true);
 }
 
 void RpcInterface::rpcGetPublicKey(RpcRequest req) {
@@ -257,8 +256,7 @@ void RpcInterface::rpcTokenParse(RpcRequest req) {
 		result("user", tinfo.userId)
 			  ("created", tinfo.created)
 			  ("expires", tinfo.expireTime)
-			  ("refreshExpires", tinfo.refreshExpireTime)
-			  ("payload", tinfo.payload);
+			  ("purpose", tinfo.purpose);
 		break;
 	case UserToken::invalid:
 		return sendInvalidToken(req);
@@ -266,29 +264,40 @@ void RpcInterface::rpcTokenParse(RpcRequest req) {
 	req.setResult(result);
 }
 
-void RpcInterface::rpcTokenRefresh(RpcRequest req) {
-	if (!req.checkArgs({"Token"})) {
-		return req.setArgError();
+
+void loginsrv::RpcInterface::rpcTokenCreate(RpcRequest req) {
+	static Value argDef = Value::fromString(R"json(
+		["Token",[[1],"Purpose","Purpose"], ["number","undefined"]
+     )json");
+
+	if (!req.checkArgs(argDef)) return req.setArgError();
+	auto args = req.getArgs();
+	StrViewA token = args[0].getString();
+	UserToken::Info nfo;
+	if (tok.parse(token,nfo)) return sendInvalidToken(req);
+	bool isRefresh = nfo.purpose == "refresh";
+	if (nfo.purpose != "root" && !isRefresh) return req.setError(403,"Forbidden","The Token hasn't ability to create other tokens");
+	Value purposes = args[1];
+	unsigned int maxExpiration = args[2].getUInt()-1;
+	unsigned int rfrexp = std::min(maxExpiration, cfg.refreshTokenExpiration_sec);
+	unsigned int rootexp = std::min(maxExpiration, cfg.rootTokenExpiration_sec);
+	Object res;
+	for (Value v : purposes) {
+		unsigned int me = rootexp;
+		if (v.getString() == "refresh") {
+			if (isRefresh) {
+				me = rfrexp;
+			} else {
+				return req.setError(403,"Forbidden","The Token is not refresh");
+			}
+		}
+		UserToken::Info newinfo = tok.prepare(nfo.userId,String(v), me);
+		res(v.getString(), tok.create(newinfo));
 	}
-	StrViewA token = req.getArgs()[0].getString();
-	UserToken::Info tinfo;
-	UserToken::Status st = tok.parse(token,tinfo);
-	if (st == UserToken::invalid)
-		return sendInvalidToken(req);
+	req.setResult(res);
 
-
-	if (tinfo.expireTime == tinfo.created)
-		return req.setError(403,"Token cannot be refreshed");
-
-	UserProfile prof = us.loadProfile(UserID(tinfo.userId));
-	std::size_t revokeTime = prof["tokenRevoke"].getUInt();
-	String newtok = tok.refresh(tinfo,revokeTime);
-	if (newtok.empty()) {
-		return req.setError(410, "Token has been revoked");
-	} else {
-		req.setResult(Object("expires",tinfo.expireTime)("token",newtok));
-	}
 }
+
 
 void RpcInterface::rpcLogin(RpcRequest req) {
 	static Value argDef = Value::fromString(
@@ -325,17 +334,20 @@ void RpcInterface::rpcLogin(RpcRequest req) {
 					req.setError(402,"OTP Required");
 				}
 			}
-			UserToken::Info tnfo;
-			tok.prepare(userid, tnfo);
-			if (!remember) tnfo.refreshExpireTime = tnfo.expireTime;
+			UserToken::Info tnfo = tok.prepare(userid, "root", cfg.rootTokenExpiration_sec);
 			String token = tok.create(tnfo);
 			String choosenConfig (prof["config"]);
-			Value cfg = svc.getUserConfig(choosenConfig);
+			Value ucfg = svc.getUserConfig(choosenConfig);
 
 			Object res;
 			res("token", token)
 			   ("expires", tnfo.expireTime)
-			   ("config", cfg);
+			   ("config", ucfg);
+
+			if (remember) {
+				tnfo = tok.prepare(userid,"refresh", cfg.refreshTokenExpiration_sec);
+				res("refresh",tok.create(tnfo));
+			}
 
 			req.setResult(res);
 		} else {

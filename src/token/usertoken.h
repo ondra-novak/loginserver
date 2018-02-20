@@ -18,12 +18,13 @@ class UserToken: public Token {
 public:
 	using Token::Token;
 
+
 	struct Info {
 		time_t created;
 		time_t expireTime;
-		time_t refreshExpireTime;
+		String purpose; //purpose
 		Value userId;
-		Value payload;
+
 	};
 
 	enum Status {
@@ -32,21 +33,9 @@ public:
 		expired = 2
 	};
 
-	///Sets default expire time in seconds
-	void setExpireTime(std::size_t t);
-	///Sets default refresh expire time in seconds
-	void setRefreshExpireTime(std::size_t t);
 
-	///Creates user token
-	/**
-	 * @param userId user identification
-	 * @return token
-	 *
-	 * @note the class must be initialized with private key
-	 */
-	String create(Value userId, Value payload = Value());
+	Info prepare(Value userId, const String &purpose, unsigned int expire_s);
 
-	void prepare(Value userId, Info &info);
 
 	String create(const Info &info);
 
@@ -62,19 +51,8 @@ public:
 	Status parse(const StrViewA token, Info &info);
 
 
-	///Refresh token
-	/**
-	 * creates new token which has updated expiration data
-	 * @param info parsed token info (see parse() )
-	 * @param revokeTime timestamp of last "revoke all tokens" function. If the token is created before
-	 * this timestamp, function fails, because token has been revoked
-	 * @retval string string of new token
-	 * @retval empty failure, token is expired or revoked
-	 *
-	 * @note the class must be initialized with private key
-	 *
-	 */
-	String refresh(Info &info, time_t revokeTime);
+	bool check(const StrViewA token, const StrViewA expectedRole, Value &userId);
+
 
 	typedef time_t (*TimeSource)();
 
@@ -82,8 +60,6 @@ public:
 
 
 protected:
-	size_t expiration = 300;
-	size_t refreshExpiration = 0;
 	TimeSource timeSource = &defaultTimeSource;
 
 	Value info2json(const Info &info);

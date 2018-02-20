@@ -10,30 +10,7 @@
 namespace loginsrv {
 
 
-void UserToken::setExpireTime(std::size_t t) {
-	expiration = t;
-}
 
-void UserToken::setRefreshExpireTime(std::size_t t) {
-	refreshExpiration = t;
-}
-
-
-String UserToken::create(Value userId, Value payload) {
-
-	Info info;
-	prepare(userId, info);
-	info.payload = payload;
-	return create(info);
-}
-
-void UserToken::prepare(Value userId, Info &info) {
-	auto now = timeSource();;
-	info.userId = userId;
-	info.created = now;
-	info.expireTime = now+expiration;
-	info.refreshExpireTime = now+refreshExpiration+expiration;
-}
 
 String UserToken::create(const Info &info) {
 	Value v = info2json(info);
@@ -59,26 +36,33 @@ Value UserToken::info2json(const Info& info) {
 	return {
 		(std::uintptr_t)info.created,
 		(std::uintptr_t)(info.expireTime-info.created),
-		(std::uintptr_t)(info.refreshExpireTime-info.expireTime),
 		info.userId,
-		info.payload};
+		info.purpose};
 }
 
-String UserToken::refresh(Info& info, time_t revokeTime) {
-	auto now = timeSource();
-	if (info.refreshExpireTime < now) return String();
-	if (info.created < revokeTime) return String();
-	info.expireTime = now+expiration;
-	info.refreshExpireTime=info.expireTime+refreshExpiration;
-	return Token::createToken(info2json(info));
+bool UserToken::check(const StrViewA token, const StrViewA expectedRole, Value& userId) {
+	Info info;
+	if (parse(token, info)) return false;
+	userId = info.userId;
+	return expectedRole == info.purpose;
+
 }
+
+UserToken::Info UserToken::prepare(Value userId, const String &purpose, unsigned int expire_s) {
+	Info nfo;
+	nfo.created = timeSource();
+	nfo.expireTime = nfo.created+expire_s;
+	nfo.userId= userId;
+	nfo.purpose = purpose;
+	return nfo;
+}
+
 
 void UserToken::json2info(const Value v, Info& info) {
 	info.created = v[0].getUInt();
 	info.expireTime = v[1].getUInt()+ info.created;
-	info.refreshExpireTime = v[2].getUInt()+info.expireTime;
-	info.userId = v[3];
-	info.payload = v[4];
+	info.userId = v[2];
+	info.purpose = String(v[3]);
 }
 
 time_t UserToken::defaultTimeSource() {

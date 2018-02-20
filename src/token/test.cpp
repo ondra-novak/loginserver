@@ -38,7 +38,7 @@ std::cout << "-------------" << std::endl;
 
 UserToken ut1(Token::privateKey, "UserTokenTest");
 
-String userToken = ut1.create("Bredy");
+String userToken = ut1.create(ut1.prepare("Bredy","test",300));
 std::cout << "User token: " << userToken << std::endl;
 
 UserToken ut2(Token::publicKey, ut1.getPublicKey());
@@ -48,7 +48,7 @@ if (status == UserToken::valid) {
 	std::cout << "User Id:" << nfo.userId.toString() << std::endl;
 	std::cout << "Created:" << nfo.created << std::endl;
 	std::cout << "Expires:" << nfo.expireTime << std::endl;
-	std::cout << "RefreshExpires:" << nfo.refreshExpireTime << std::endl;
+	std::cout << "Purpose:" << nfo.purpose<< std::endl;
 }
 
 return 0;

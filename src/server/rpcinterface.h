@@ -45,9 +45,14 @@ public:
 		 */
 		virtual String getOTPLabel(const UserProfile &profile)  = 0;
 
-		virtual unsigned int getCodeExpirationSec() = 0;
-
 		virtual Value getUserConfig(const StrViewA key) = 0;
+	};
+
+	struct Config {
+		unsigned int mailCodeExpiration_sec;
+		unsigned int rootTokenExpiration_sec;
+		unsigned int refreshTokenExpiration_sec;
+
 	};
 
 
@@ -56,7 +61,8 @@ public:
 
 	RpcInterface (UserServices &us,
 				  UserToken &tok,
-				  IServices &svc);
+				  IServices &svc,
+				  const Config &cfg);
 
 
 	void registerMethods(RpcServer &srv);
@@ -66,7 +72,7 @@ public:
 	void rpcRegisterUser(RpcRequest req);
 	void rpcLogin(RpcRequest req);
 	void rpcTokenParse(RpcRequest req);
-	void rpcTokenRefresh(RpcRequest req);
+	void rpcTokenCreate(RpcRequest req);
 	void rpcTokenRevokeAll(RpcRequest req);
 	void rpcSetPassword(RpcRequest req);
 	void rpcResetPassword(RpcRequest req);
@@ -87,6 +93,7 @@ protected:
 	UserServices &us;
 	UserToken &tok;
 	IServices &svc;
+	Config cfg;
 	bool firstUser;
 
 private:
