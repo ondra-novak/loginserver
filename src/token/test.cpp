@@ -38,7 +38,7 @@ std::cout << "-------------" << std::endl;
 
 UserToken ut1(Token::privateKey, "UserTokenTest");
 
-String userToken = ut1.create(ut1.prepare("Bredy","test",300));
+String userToken = ut1.create(ut1.prepare("Bredy","test",Value(),300));
 std::cout << "User token: " << userToken << std::endl;
 
 UserToken ut2(Token::publicKey, ut1.getPublicKey());

@@ -87,6 +87,12 @@ public:
 	void rpcUserEnableOTP(RpcRequest req);
 	void rpcUserCheckOTP(RpcRequest req);
 	void rpcUserVerifyOTP(RpcRequest req);
+	void rpcAdminListUsers(RpcRequest req);
+	void rpcAdminFindUser(RpcRequest req);
+	void rpcAdminCreateUser(RpcRequest req);
+	void rpcAdminDeleteUser(RpcRequest req);
+	void rpcAdminLogAsUser(RpcRequest req);
+	void rpcAdminSetPassword(RpcRequest req);
 
 
 protected:

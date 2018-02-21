@@ -24,6 +24,7 @@ StrViewA findUserDesignDoc = R"json({
 			"map":function(doc) {
 				if (doc.public.email) emit(doc.public.email, null);
 				if (doc.public.alias) emit(doc.public.alias, null);
+				emit(doc._id);
 			}
 		}
 	}
@@ -168,10 +169,14 @@ UserProfile UserServices::createUser(const StrViewA& email) {
 	else roles = json::array;
 	nextUserIsAdmin = false;
 
+	Value vemail = email.indexOf("@") != email.npos?Value(email):Value(nullptr);
+	Value valias = email.indexOf("@") == email.npos?Value(email):Value(nullptr);
+
+
 	UserProfile profile ( db.newDocument());
 	profile
 		   ("tm_created",(std::size_t)now)
-		   ("public",Object("state","new")("email", email)("alias", nullptr)("roles",roles));
+		   ("public",Object("state","new")("email", vemail)("alias", valias)("roles",roles));
 	profile.enableTimestamp();
 	return profile;
 }
@@ -275,6 +280,32 @@ Value UserProfile::getHOTPInfo() const {
 	} else {
 		return nullptr;
 	}
+}
+
+bool UserProfile::isAdmin() const {
+	return hasRole("_admin");
+}
+
+
+bool UserProfile::hasRole(StrViewA role) const {
+	Value roles = getRoles();
+	for (Value v: roles) if (v.getString() == role) return true;
+	return false;
+}
+
+Value UserProfile::getRoles() const {
+	return operator[]("public")["roles"];
+}
+
+Value UserServices::listUsers() const {
+	Query lst = db.createQuery(View::includeDocs);
+	Result res = lst.range("","_").exec();
+	Array out;
+	for (Row rw : res) {
+		out.push_back({rw.id, rw.doc["public"]["email"], rw.doc["public"]["alias"], rw.doc[CouchDB::fldTimestamp]});
+	}
+	return out;
+
 }
 
 } /* namespace loginsrv */

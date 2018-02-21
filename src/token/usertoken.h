@@ -24,6 +24,7 @@ public:
 		time_t expireTime;
 		Value purpose; //purpose
 		Value userId;
+		Value roles; //roles defined by a user profile
 	};
 
 	enum Status {
@@ -33,7 +34,7 @@ public:
 	};
 
 
-	Info prepare(Value userId, const Value &purpose, unsigned int expire_s);
+	Info prepare(Value userId, const Value &purpose, const Value &roles, unsigned int expire_s);
 
 
 	String create(const Info &info);
@@ -50,9 +51,10 @@ public:
 	Status parse(const StrViewA token, Info &info);
 
 
-	Value check(const StrViewA &token, const StrViewA &purpose);
-	Value check(const StrViewA &token, const StringView<StrViewA> &listPurposes);
+	Value check(const StrViewA &token, const StrViewA &purpose, const StrViewA &role = StrViewA());
+	Value check(const StrViewA &token, const StringView<StrViewA> &listPurposes, const StrViewA &role = StrViewA());
 
+	static Value checkRole(const Info &info, const StrViewA &role);
 
 	typedef time_t (*TimeSource)();
 

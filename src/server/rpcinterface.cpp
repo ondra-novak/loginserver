@@ -36,6 +36,11 @@ void RpcInterface::registerMethods(RpcServer& srv) {
 	srv.add("Token.getPublicKey",this,&RpcInterface::rpcGetPublicKey);
 	srv.add("Admin.loadAccount",this,&RpcInterface::rpcAdminLoadAccount);
 	srv.add("Admin.updateAccount",this,&RpcInterface::rpcAdminUpdateAccount);
+	srv.add("Admin.listUsers",this,&RpcInterface::rpcAdminListUsers);
+	srv.add("Admin.createUser",this,&RpcInterface::rpcAdminCreateUser);
+	srv.add("Admin.deleteUser",this,&RpcInterface::rpcAdminDeleteUser);
+	srv.add("Admin.logAsUser",this,&RpcInterface::rpcAdminLogAsUser);
+	srv.add("Admin.setPassword",this,&RpcInterface::rpcAdminSetPassword);
 
 }
 
@@ -231,6 +236,7 @@ void RpcInterface::rpcUserEnableOTP(RpcRequest req) {
 
 }
 
+
 void RpcInterface::sendInvalidToken(RpcRequest req) {
 	return req.setError(402, "Invalid token");
 }
@@ -256,7 +262,8 @@ void RpcInterface::rpcTokenParse(RpcRequest req) {
 		result("user", tinfo.userId)
 			  ("created", tinfo.created)
 			  ("expires", tinfo.expireTime)
-			  ("purpose", tinfo.purpose);
+			  ("purpose", tinfo.purpose)
+			  ("roles", tinfo.roles);
 		break;
 	case UserToken::invalid:
 		return sendInvalidToken(req);
@@ -302,6 +309,7 @@ void loginsrv::RpcInterface::rpcTokenCreate(RpcRequest req) {
 	unsigned int rootexp = std::min(maxExpiration, cfg.rootTokenExpiration_sec);
 	Array res;
 	for (Value v : purposes) {
+		Value roles;
 		unsigned int me = rootexp;
 		Value finalRoles;
 		if (v.type() == json::string) {
@@ -312,6 +320,7 @@ void loginsrv::RpcInterface::rpcTokenCreate(RpcRequest req) {
 			} else {
 				if (limits.defined() && limits.indexOf(v) == limits.npos) return req.setError(403,"Forbidden","Limited");
 				finalRoles = v;
+				roles = prof.getRoles();
 			}
 
 		} else if (v.type() == json::array && !v.empty()) {
@@ -339,6 +348,7 @@ void loginsrv::RpcInterface::rpcTokenCreate(RpcRequest req) {
 				} else {
 					finalRoles = v;
 				}
+				roles = prof.getRoles();
 			}
 		} else {
 			return req.setError(400,"Bad request","Invalid purpose for the token");
@@ -347,12 +357,13 @@ void loginsrv::RpcInterface::rpcTokenCreate(RpcRequest req) {
 		if (finalRoles.indexOf(refreshVal,1) != finalRoles.npos) {
 			return req.setError(400,"Bad request","Purpose refresh cannot be used in list of purposes");
 		}
-		UserToken::Info newinfo = tok.prepare(nfo.userId,finalRoles, me);
+		UserToken::Info newinfo = tok.prepare(nfo.userId,finalRoles, roles,me);
 		res.push_back(tok.create(newinfo));
 	}
 	req.setResult(res);
 
 }
+
 
 
 void RpcInterface::rpcLogin(RpcRequest req) {
@@ -361,6 +372,9 @@ void RpcInterface::rpcLogin(RpcRequest req) {
 	 "\"password\":\"Password\","
 	 "\"otp\":[\"number\",\"optional\"],"
 	 "\"keep\":[\"boolean\",\"optional\"]}]");
+
+	static Value normalPurposes = {"root","account"};
+	static Value adminPurposes = {"root","account","_admin"};
 
 	if (!req.checkArgs(argDef)) {
 		return req.setArgError();
@@ -371,10 +385,14 @@ void RpcInterface::rpcLogin(RpcRequest req) {
 	unsigned int otp = args["otp"].getUInt();
 	bool remember = args["keep"].getBool();
 
+
+
 	try {
 		UserID userid = us.findUser(user);
 		UserProfile prof = us.loadProfile(userid);
 		if (prof.checkPassword(password)) {
+
+
 
 			if (prof.isOTPEnabled()) {
 				if (otp) {
@@ -390,7 +408,7 @@ void RpcInterface::rpcLogin(RpcRequest req) {
 					req.setError(402,"OTP Required");
 				}
 			}
-			UserToken::Info tnfo = tok.prepare(userid, {"root","account"}, cfg.rootTokenExpiration_sec);
+			UserToken::Info tnfo = tok.prepare(userid,prof.isAdmin()?adminPurposes:normalPurposes ,prof.getRoles(), cfg.rootTokenExpiration_sec);
 			String token = tok.create(tnfo);
 			String choosenConfig (prof["config"]);
 			Value ucfg = svc.getUserConfig(choosenConfig);
@@ -401,7 +419,7 @@ void RpcInterface::rpcLogin(RpcRequest req) {
 			   ("config", ucfg);
 
 			if (remember) {
-				tnfo = tok.prepare(userid,"refresh", cfg.refreshTokenExpiration_sec);
+				tnfo = tok.prepare(userid,"refresh", Value(), cfg.refreshTokenExpiration_sec);
 				res("refresh",tok.create(tnfo));
 			}
 
@@ -443,41 +461,36 @@ void RpcInterface::rpcAdminLoadAccount(RpcRequest req) {
 	auto args = req.getArgs();
 	StrViewA token = args[0].getString();
 	StrViewA victim = args[1].getString();
-	Value userId = tok.check(token,"root");
+	Value userId = tok.check(token,{"_admin","_admin_ro"},"_admin");
 	if (!userId.defined()) return sendInvalidToken(req);
-	UserProfile prof = us.loadProfile(userId);
-	if (Value(prof)["public"]["roles"].indexOf("_admin") == Value::npos)
-		return req.setError(403,"Forbidden");
+
 	UserID uid = us.findUser(victim);
 	if (uid.empty()) return req.setError(404,"Not found");
-	prof = us.loadProfile(uid);
+	UserProfile prof = us.loadProfile(uid);
 	req.setResult(Value(prof).replace("_id",json::undefined).replace("_rev",json::undefined));
 }
 
 void RpcInterface::rpcAdminUpdateAccount(RpcRequest req) {
 	static Value argdef = Value::fromString(
-	R"json(["string","Token",{
+	R"json(["Token","string",{
 			"_id":"undefined",
 			"_rev":"undefined",
-			"%":"any		
-	})json");
+			"%":"any"		
+	}])json");
 	if (!req.checkArgs(argdef)) return req.setArgError();
 
 	auto args = req.getArgs();
 	StrViewA token = args[0].getString();
 	StrViewA victim = args[1].getString();
 	Value update = args[2];
-	Value userId = tok.check(token,"root");
+	Value userId = tok.check(token,"_admin","_admin");
 	if (!userId.defined()) return sendInvalidToken(req);
-	UserProfile prof = us.loadProfile(userId);
-	if (Value(prof)["public"]["roles"].indexOf("_admin") == Value::npos)
-		return req.setError(403,"Forbidden");
+
 	UserID uid = us.findUser(victim);
-	if (uid.empty()) return req.setError(404,"Not found");
-	prof = us.loadProfile(uid);
-	prof = Value(prof).merge(Object("public",update));
+	UserProfile prof = us.loadProfile(uid);
+	prof = Value(prof).merge(update);
 	us.storeProfile(prof);
-	req.setResult(Value(prof)["public"]);
+	req.setResult(Value(prof).replace("_id",json::undefined).replace("_rev",json::undefined));
 }
 
 void RpcInterface::rpcUserCheckOTP(RpcRequest req) {
@@ -508,6 +521,88 @@ void loginsrv::RpcInterface::rpcUserVerifyOTP(RpcRequest req) {
 	Value nfo = prof.getHOTPInfo();
 	if (nfo.isNull()) req.setError(404,"No HTOP informations are available");
 	else req.setResult(nfo);
+}
+
+void RpcInterface::rpcAdminListUsers(RpcRequest req) {
+	if (!req.checkArgs({"Token"})) return req.setArgError();
+	auto args = req.getArgs();
+	StrViewA token = args[0].getString();
+	Value userId = tok.check(token,{"_admin","_admin_ro"},"_admin");
+	if (!userId.defined()) return sendInvalidToken(req);
+
+	req.setResult(us.listUsers());
+}
+
+void RpcInterface::rpcAdminCreateUser(RpcRequest req) {
+	if (!req.checkArgs({"Token","string"})) return req.setArgError();
+	auto args = req.getArgs();
+	StrViewA token = args[0].getString();
+	StrViewA newid = args[1].getString();
+	Value userId = tok.check(token,"_admin","_admin");
+	if (!userId.defined()) return sendInvalidToken(req);
+	UserID u = us.findUser(newid);
+	if (u.empty()) {
+		UserProfile p = us.createUser(newid);
+		us.storeProfile(p);
+		return rpcAdminLoadAccount(req);
+	} else {
+		return req.setError(409,"Already exists");
+	}
+}
+
+void RpcInterface::rpcAdminDeleteUser(RpcRequest req) {
+	if (!req.checkArgs({"Token","string"})) return req.setArgError();
+	auto args = req.getArgs();
+	StrViewA token = args[0].getString();
+	StrViewA newid = args[1].getString();
+	Value userId = tok.check(token,"_admin","_admin");
+	if (!userId.defined()) return sendInvalidToken(req);
+	UserID u = us.findUser(newid);
+	if (u.empty()) return req.setError(404,"Not found");
+	UserProfile prof = us.loadProfile(u);
+	prof.set("_deleted",true);
+	us.storeProfile(prof);
+	req.setResult(true);
+}
+
+void RpcInterface::rpcAdminLogAsUser(RpcRequest req) {
+	if (!req.checkArgs({"Token","string"})) return req.setArgError();
+	auto args = req.getArgs();
+	StrViewA token = args[0].getString();
+	StrViewA victim = args[1].getString();
+	Value userId = tok.check(token,"_admin","_admin");
+	if (!userId.defined()) return sendInvalidToken(req);
+	UserID u = us.findUser(victim);
+	if (u.empty()) return req.setError(404,"Not found");
+	UserProfile prof = us.loadProfile(u);
+
+	auto inf = tok.prepare(u,{"root","account"},prof.getRoles(),cfg.rootTokenExpiration_sec);
+	String choosenConfig (prof["config"]);
+	Value ucfg = svc.getUserConfig(choosenConfig);
+
+	Object res;
+	res("token", tok.create(inf))
+	   ("expires", inf.expireTime)
+	   ("config", ucfg);
+
+	req.setResult(res);
+
+}
+
+void RpcInterface::rpcAdminSetPassword(RpcRequest req) {
+	if (!req.checkArgs({"Token","string","Password"})) return req.setArgError();
+	auto args = req.getArgs();
+	StrViewA token = args[0].getString();
+	StrViewA id = args[1].getString();
+	StrViewA password = args[2].getString();
+	Value userId = tok.check(token,"_admin","_admin");
+	if (!userId.defined()) return sendInvalidToken(req);
+	UserID u = us.findUser(id);
+	if (u.empty()) return req.setError(404,"Not found");
+	UserProfile prof = us.loadProfile(u);
+	prof.setPassword(password);
+	us.storeProfile(prof);
+	req.setResult(true);
 }
 
 

@@ -37,46 +37,55 @@ Value UserToken::info2json(const Info& info) {
 		(std::uintptr_t)info.created,
 		(std::uintptr_t)(info.expireTime-info.created),
 		info.userId,
-		info.purpose};
+		info.purpose,
+		info.roles};
 }
 
-Value UserToken::check(const StrViewA &token, const StrViewA &purpose) {
+Value UserToken::checkRole(const Info &info, const StrViewA &role) {
+	if (!role.empty()) {
+		for (Value v : info.roles) if (v.getString() == role) return info.userId;
+		return Value();
+	} else {
+		return info.userId;
+	}
+}
+
+Value UserToken::check(const StrViewA &token, const StrViewA &purpose, const StrViewA &role ) {
 	Value userId;
 	Info info;
 	if (parse(token, info)) return userId;
-	userId = info.userId;
 	if (info.purpose.type() == json::array) {
-		for (Value a: info.purpose) if (a.getString() == purpose) return userId;
+		for (Value a: info.purpose) if (a.getString() == purpose) return checkRole(info, role);
 	}else {
-		if (purpose == info.purpose.getString()) return userId;
+		if (purpose == info.purpose.getString()) return checkRole(info,role);
 	}
 	return Value();
 
 }
 
-Value UserToken::check(const StrViewA &token, const StringView<StrViewA> &listPurposes) {
+Value UserToken::check(const StrViewA &token, const StringView<StrViewA> &listPurposes, const StrViewA &role ) {
 	Info info;
 	Value userId;
 	if (parse(token, info)) return userId;
-	userId = info.userId;
 
 	for (auto &&x: listPurposes) {
 
 		if (info.purpose.type() == json::array) {
-			for (Value a: info.purpose) if (a.getString() == x) return userId;
+			for (Value a: info.purpose) if (a.getString() == x) return checkRole(info,role);
 		}else {
-			if (x== info.purpose.getString()) return userId;
+			if (x== info.purpose.getString()) return checkRole(info,role);
 		}
 	}
 	return Value();
 }
 
-UserToken::Info UserToken::prepare(Value userId, const Value &purpose, unsigned int expire_s) {
+UserToken::Info UserToken::prepare(Value userId, const Value &purpose, const Value &roles, unsigned int expire_s) {
 	Info nfo;
 	nfo.created = timeSource();
 	nfo.expireTime = nfo.created+expire_s;
 	nfo.userId= userId;
 	nfo.purpose = purpose;
+	nfo.roles = roles;
 	return nfo;
 }
 
@@ -86,6 +95,7 @@ void UserToken::json2info(const Value v, Info& info) {
 	info.expireTime = v[1].getUInt()+ info.created;
 	info.userId = v[2];
 	info.purpose = String(v[3]);
+	info.roles = v[4];
 }
 
 time_t UserToken::defaultTimeSource() {

@@ -107,6 +107,7 @@ void Svcs::sendMail(const StrViewA email,
 		const StrViewA templateName,
 		const Value &templateData) {
 
+	if (email.empty()) return;
 	Value req = Object("template",String({templatePrefix,templateName}))
 			("recepient", email)
 			("data", templateData);

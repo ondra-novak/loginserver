@@ -90,6 +90,11 @@ public:
 
 
 	static Value calculatePasswordDigest(const StrViewA &salt, const StrViewA &password);
+	bool isAdmin() const;
+	bool hasRole(StrViewA role) const;
+	Value getRoles() const;
+
+
 };
 
 
@@ -102,6 +107,8 @@ public:
 	UserID findUser(const StrViewA &email) const;
 	UserProfile loadProfile(const UserID &user);
 	void storeProfile(UserProfile &profile);
+
+	Value listUsers() const;
 
 protected:
 	CouchDB &db;
