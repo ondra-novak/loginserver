@@ -241,6 +241,7 @@ int main(int argc, char **argv) {
 	ifccfg.mailCodeExpiration_sec = loginCfg.mandatory["mail_code_expires"].getUInt();
 	ifccfg.refreshTokenExpiration_sec = loginCfg.mandatory["refresh_token_expires"].getUInt();
 	ifccfg.rootTokenExpiration_sec = loginCfg.mandatory["token_expires"].getUInt();
+	ifccfg.userLockWait = loginCfg.mandatory["login_failure_lock_time"].getUInt();
 
 	UserServices us(couchdb);
 	Svcs ifcsvc(templatePrefix,sendCmd,captcha,otpIssuer,userConfigJson);

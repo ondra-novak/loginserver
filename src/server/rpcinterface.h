@@ -1,5 +1,6 @@
 #ifndef SRC_SERVER_RPCINTERFACE_H_
 #define SRC_SERVER_RPCINTERFACE_H_
+#include <server/user_lock.h>
 
 #pragma once
 
@@ -52,6 +53,7 @@ public:
 		unsigned int mailCodeExpiration_sec;
 		unsigned int rootTokenExpiration_sec;
 		unsigned int refreshTokenExpiration_sec;
+		unsigned int userLockWait;
 
 	};
 
@@ -102,9 +104,12 @@ protected:
 	Config cfg;
 	bool firstUser;
 
+	UserLock ulock;
+
 private:
 	void sendInvalidToken(json::RpcRequest req);
-
+	void sendUserLocked(RpcRequest& req);
+	Value outTokenInfo(const UserToken::Info &info);
 };
 
 

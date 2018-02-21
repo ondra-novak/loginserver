@@ -358,13 +358,26 @@ void loginsrv::RpcInterface::rpcTokenCreate(RpcRequest req) {
 			return req.setError(400,"Bad request","Purpose refresh cannot be used in list of purposes");
 		}
 		UserToken::Info newinfo = tok.prepare(nfo.userId,finalRoles, roles,me);
-		res.push_back(tok.create(newinfo));
+		res.push_back(outTokenInfo(newinfo));
 	}
 	req.setResult(res);
 
 }
 
+void RpcInterface::sendUserLocked(RpcRequest& req) {
+	return req.setError(423, "User is locked",
+			Object("wait_sec", cfg.userLockWait));
+}
 
+Value RpcInterface::outTokenInfo(const UserToken::Info &info) {
+	return Value(json::object,{
+		Value("expires",info.expireTime),
+		Value("token",tok.create(info))
+	});
+
+
+
+}
 
 void RpcInterface::rpcLogin(RpcRequest req) {
 	static Value argDef = Value::fromString(
@@ -380,54 +393,76 @@ void RpcInterface::rpcLogin(RpcRequest req) {
 		return req.setArgError();
 	}
 	Value args = req.getArgs()[0];
-	StrViewA user = args["user"].getString();
+	Value user = args["user"];
 	StrViewA password = args["password"].getString();
 	unsigned int otp = args["otp"].getUInt();
 	bool remember = args["keep"].getBool();
 
+	time_t now;
+	time(&now);
+	time_t locktime = now + cfg.userLockWait;
 
-
-	try {
-		UserID userid = us.findUser(user);
-		UserProfile prof = us.loadProfile(userid);
-		if (prof.checkPassword(password)) {
-
-
-
-			if (prof.isOTPEnabled()) {
-				if (otp) {
-					if (!prof.checkOTP(otp)) {
-						Value data;
-						unsigned int cnt = prof.checkOTPFirstCode(otp);
-						if (cnt) data = Object("counter",cnt);
-						req.setError(401,"Invalid credentials",data);
-					} else {
-						us.storeProfile(prof);
-					}
-				} else {
-					req.setError(402,"OTP Required");
-				}
-			}
-			UserToken::Info tnfo = tok.prepare(userid,prof.isAdmin()?adminPurposes:normalPurposes ,prof.getRoles(), cfg.rootTokenExpiration_sec);
-			String token = tok.create(tnfo);
-			String choosenConfig (prof["config"]);
-			Value ucfg = svc.getUserConfig(choosenConfig);
-
-			Object res;
-			res("token", token)
-			   ("expires", tnfo.expireTime)
-			   ("config", ucfg);
-
-			if (remember) {
-				tnfo = tok.prepare(userid,"refresh", Value(), cfg.refreshTokenExpiration_sec);
-				res("refresh",tok.create(tnfo));
-			}
-
-			req.setResult(res);
-		} else {
-			req.setError(401,"Invalid credentials");
+	UserID userid = us.findUser(user.getString());
+	if (userid.empty()) {
+		if (ulock.isUserLocked(user) > now) {
+			return sendUserLocked(req);
 		}
-	} catch (...) {
+		req.setError(401,"Invalid credentials");
+		//perform maintenance
+		ulock.unlockUser(nullptr,now);
+		//lock
+		ulock.lockUser(user, locktime);
+		return;
+	}
+
+
+
+	//if user is locked, do not continue in login
+	if (ulock.isUserLocked(user) > now) {
+		return sendUserLocked(req);
+	}
+
+	UserProfile prof = us.loadProfile(userid);
+	if (prof.checkPassword(password)) {
+
+
+
+		if (prof.isOTPEnabled()) {
+			if (otp) {
+				if (!prof.checkOTP(otp)) {
+					Value data;
+					unsigned int cnt = prof.checkOTPFirstCode(otp);
+					if (cnt) data = Object("counter",cnt);
+					//lock when invalid OTP to prevent brutalforcing OTP
+					ulock.lockUser(user, locktime);
+					return req.setError(401,"Invalid credentials",data);
+				} else {
+					us.storeProfile(prof);
+				}
+			} else {
+				return req.setError(402,"OTP Required");
+			}
+		}
+		UserToken::Info tnfo = tok.prepare(userid,prof.isAdmin()?adminPurposes:normalPurposes ,prof.getRoles(), cfg.rootTokenExpiration_sec);
+		String token = tok.create(tnfo);
+		String choosenConfig (prof["config"]);
+		Value ucfg = svc.getUserConfig(choosenConfig);
+
+		Object res;
+		res("token", outTokenInfo(tnfo))
+		   ("config", ucfg);
+
+		if (remember) {
+			tnfo = tok.prepare(userid,"refresh", Value(), cfg.refreshTokenExpiration_sec);
+			res("refresh",outTokenInfo(tnfo));
+		}
+
+		//unlock user now (and perform maintenance)
+		ulock.unlockUser(user, now);
+		req.setResult(res);
+	} else {
+		//lock user
+		ulock.lockUser(user, locktime);
 		req.setError(401,"Invalid credentials");
 	}
 }

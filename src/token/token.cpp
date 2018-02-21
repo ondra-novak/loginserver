@@ -68,7 +68,7 @@ protected:
 String Token::createToken(Value payload) const {
 	std::basic_string<unsigned char> buffer;
 	auto writter = [&](char c){buffer.push_back(c);};
-	json::BinarySerializer<decltype(writter)> ser(writter, json::compressKeys);
+	json::BinarySerializer<decltype(writter)> ser(writter, json::compressKeys|json::compressTokenStrings);
 	for (auto &&x: preloadedKeys) ser.preloadKey(x);
 	ser.serialize(payload);
 

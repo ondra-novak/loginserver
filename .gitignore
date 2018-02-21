@@ -39,3 +39,4 @@ Makefile
 *.out
 *.app
 
+/conf.local

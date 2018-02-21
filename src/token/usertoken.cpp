@@ -36,9 +36,9 @@ Value UserToken::info2json(const Info& info) {
 	return {
 		(std::uintptr_t)info.created,
 		(std::uintptr_t)(info.expireTime-info.created),
-		info.userId,
-		info.purpose,
-		info.roles};
+		info.userId.stripKey(),
+		info.purpose.stripKey(),
+		info.roles.stripKey()};
 }
 
 Value UserToken::checkRole(const Info &info, const StrViewA &role) {
