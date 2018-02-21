@@ -134,7 +134,7 @@ UserProfile::TryResult UserProfile::tryAcccessCode(String purpose, String code) 
 		if (curpurpose != purpose
 				|| !curcode.defined()
 				|| !expires.defined()
-				|| expires.getUInt() < now) {
+				|| expires.getInt() < now) {
 			tr = invalid;
 		} else if (curcode.getString() != code) {
 

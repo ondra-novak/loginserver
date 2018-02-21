@@ -73,12 +73,12 @@ void RpcInterface::rpcTokenRevokeAll(RpcRequest req) {
 	}
 	StrViewA token = req.getArgs()[0].getString();
 	UserToken::Info tinfo;
-	if (tok.parse(token,tinfo))
-		return sendInvalidToken(req);
+	Value userId = tok.check(token,"root");
+	if (!userId.defined()) return sendInvalidToken(req);
 
 	UserProfile prof = us.loadProfile(UserID(tinfo.userId));
 	time_t now;time(&now);
-	prof("tokenRevoke", (std::size_t)now);
+	prof("token_revoke", (std::size_t)now);
 	us.storeProfile(prof);
 	req.setResult(true);
 }
@@ -155,9 +155,9 @@ void RpcInterface::rpcLoadAccount(RpcRequest req) {
 	}
 	auto args = req.getArgs();
 	StrViewA token = args[0].getString();
-	UserToken::Info tinfo;
-	if (tok.parse(token,tinfo) != UserToken::valid) return sendInvalidToken(req);
-	UserProfile prof = us.loadProfile(tinfo.userId);
+	Value userId = tok.check(token,{"account","account_ro"});
+	if (!userId.defined()) return sendInvalidToken(req);
+	UserProfile prof = us.loadProfile(userId);
 	req.setResult(prof["public"]);
 }
 
@@ -168,9 +168,9 @@ void RpcInterface::rpcSaveAccount(RpcRequest req) {
 	auto args = req.getArgs();
 	StrViewA token = args[0].getString();
 	Value update = args[1];
-	UserToken::Info tinfo;
-	if (tok.parse(token,tinfo) != UserToken::valid) return sendInvalidToken(req);
-	UserProfile p = us.loadProfile(tinfo.userId);
+	Value userId = tok.check(token,"account");
+	if (!userId.defined()) return sendInvalidToken(req);
+	UserProfile p = us.loadProfile(userId);
 	if (update["roles"].defined() || update["email"].defined()) {
 		return req.setError(403,"Forbidden","Can't update read-only fields");
 	}
@@ -178,7 +178,7 @@ void RpcInterface::rpcSaveAccount(RpcRequest req) {
 		StrViewA a = update["alias"].getString();
 		if (!a.empty()) {
 			UserID id = us.findUser(a);
-			if (!id.empty() && id != String(tinfo.userId))
+			if (!id.empty() && id != String(userId))
 				return req.setError(409,"Alias is already used");
 		}
 	}
@@ -191,11 +191,11 @@ void RpcInterface::rpcUserPrepareOTP(RpcRequest req) {
 	static Value argdef = Value::fromString(R"(["Token",["'totp","'hotp"]])");
 	if (!req.checkArgs(argdef)) return req.setArgError();
 	StrViewA token = req.getArgs()[0].getString();
-	UserToken::Info tinfo;
-	if (tok.parse(token,tinfo)) return sendInvalidToken(req);
+	Value userId = tok.check(token,"account");
+	if (!userId.defined()) return sendInvalidToken(req);
 
 	StrViewA type = req.getArgs()[1].getString();
-	UserProfile prof = us.loadProfile(tinfo.userId);
+	UserProfile prof = us.loadProfile(userId);
 	BinaryView bin = prof.setOTP(type);
 	us.storeProfile(prof);
 
@@ -267,7 +267,7 @@ void RpcInterface::rpcTokenParse(RpcRequest req) {
 
 void loginsrv::RpcInterface::rpcTokenCreate(RpcRequest req) {
 	static Value argDef = Value::fromString(R"json(
-		["Token",[[1],"Purpose","Purpose"], ["number","undefined"]
+		["Token",[[1],"Purpose","Purpose"], ["number","undefined"]]
      )json");
 
 	if (!req.checkArgs(argDef)) return req.setArgError();
@@ -275,24 +275,80 @@ void loginsrv::RpcInterface::rpcTokenCreate(RpcRequest req) {
 	StrViewA token = args[0].getString();
 	UserToken::Info nfo;
 	if (tok.parse(token,nfo)) return sendInvalidToken(req);
-	bool isRefresh = nfo.purpose == "refresh";
-	if (nfo.purpose != "root" && !isRefresh) return req.setError(403,"Forbidden","The Token hasn't ability to create other tokens");
+	Value limits;
+	static Value rootVal("root");
+	static Value refreshVal("refresh");
+	bool isRefresh;
+	if (nfo.purpose == refreshVal || (nfo.purpose.size() == 2 && nfo.purpose[0] == refreshVal)) {
+		limits = nfo.purpose[1];
+		isRefresh = true;
+	}
+	else if (nfo.purpose == rootVal || nfo.purpose.indexOf(rootVal) != nfo.purpose.npos) {
+		isRefresh = false;
+	} else {
+		return req.setError(403,"Forbidden","The Token hasn't the ability to create other tokens");
+	}
+
+	UserProfile prof(us.loadProfile(nfo.userId));
+	time_t revoke_time = prof["token_revoke"].getUInt();
+	if (nfo.created < revoke_time) {
+		return req.setError(410,"Token revoked");
+	}
+
 	Value purposes = args[1];
-	unsigned int maxExpiration = args[2].getUInt()-1;
+	unsigned int maxExpiration = args[2].getUInt();
+	if (maxExpiration == 0) maxExpiration = std::max(cfg.refreshTokenExpiration_sec,cfg.rootTokenExpiration_sec);
 	unsigned int rfrexp = std::min(maxExpiration, cfg.refreshTokenExpiration_sec);
 	unsigned int rootexp = std::min(maxExpiration, cfg.rootTokenExpiration_sec);
-	Object res;
+	Array res;
 	for (Value v : purposes) {
 		unsigned int me = rootexp;
-		if (v.getString() == "refresh") {
-			if (isRefresh) {
+		Value finalRoles;
+		if (v.type() == json::string) {
+			if (v == refreshVal) {
+				if (isRefresh) finalRoles = nfo.purpose;
+				else return req.setError(403,"Forbidden","The token hasn't the ability to create refresh tokens");
 				me = rfrexp;
 			} else {
-				return req.setError(403,"Forbidden","The Token is not refresh");
+				if (limits.defined() && limits.indexOf(v) == limits.npos) return req.setError(403,"Forbidden","Limited");
+				finalRoles = v;
 			}
+
+		} else if (v.type() == json::array && !v.empty()) {
+			if (v[0] == refreshVal) {
+				if (v.size() != 2 || v[1].type() != json::array || v[1].empty())
+					return req.setError(400,"Bad request","Invalid purpose for the refresh token");
+				if (isRefresh) {
+					if (limits.defined()) {
+						Value filtered = v[1].sort(&Value::compare).intersection(limits.sort(&Value::compare));
+						if (filtered.empty()) {
+							return req.setError(403,"Forbidden","Limited");
+						}
+						finalRoles = {v[0],filtered};
+					} else {
+						finalRoles = v;
+					}
+					me = rfrexp;
+				} else {
+					return req.setError(403,"Forbidden","The token hasn't the ability to create refresh tokens");
+				}
+			} else {
+				if (limits.defined()) {
+					finalRoles = v.sort(&Value::compare).intersection(limits.sort(&Value::compare));
+					if (finalRoles.empty()) return req.setError(403,"Forbidden","Limited");
+				} else {
+					finalRoles = v;
+				}
+			}
+		} else {
+			return req.setError(400,"Bad request","Invalid purpose for the token");
 		}
-		UserToken::Info newinfo = tok.prepare(nfo.userId,String(v), me);
-		res(v.getString(), tok.create(newinfo));
+
+		if (finalRoles.indexOf(refreshVal,1) != finalRoles.npos) {
+			return req.setError(400,"Bad request","Purpose refresh cannot be used in list of purposes");
+		}
+		UserToken::Info newinfo = tok.prepare(nfo.userId,finalRoles, me);
+		res.push_back(tok.create(newinfo));
 	}
 	req.setResult(res);
 
@@ -334,7 +390,7 @@ void RpcInterface::rpcLogin(RpcRequest req) {
 					req.setError(402,"OTP Required");
 				}
 			}
-			UserToken::Info tnfo = tok.prepare(userid, "root", cfg.rootTokenExpiration_sec);
+			UserToken::Info tnfo = tok.prepare(userid, {"root","account"}, cfg.rootTokenExpiration_sec);
 			String token = tok.create(tnfo);
 			String choosenConfig (prof["config"]);
 			Value ucfg = svc.getUserConfig(choosenConfig);
@@ -366,10 +422,10 @@ void RpcInterface::rpcSetPassword(RpcRequest req) {
 	StrViewA token = args[0].getString();
 	StrViewA old_password = args[1].getString();
 	StrViewA password = args[2].getString();
-	UserToken::Info tinfo;
-	if (tok.parse(token,tinfo)) return sendInvalidToken(req);
+	Value userId = tok.check(token,"account");
+	if (!userId.defined()) return sendInvalidToken(req);
 
-	UserProfile prof = us.loadProfile(UserID(tinfo.userId));
+	UserProfile prof = us.loadProfile(UserID(userId));
 	if (!prof.checkPassword(old_password)) {
 		req.setError(403,"Password doesn't match");
 	} else {
@@ -386,13 +442,13 @@ void RpcInterface::rpcAdminLoadAccount(RpcRequest req) {
 	}
 	auto args = req.getArgs();
 	StrViewA token = args[0].getString();
-	StrViewA userid = args[1].getString();
-	UserToken::Info tinfo;
-	if (tok.parse(token,tinfo) != UserToken::valid) return sendInvalidToken(req);
-	UserProfile prof = us.loadProfile(tinfo.userId);
+	StrViewA victim = args[1].getString();
+	Value userId = tok.check(token,"root");
+	if (!userId.defined()) return sendInvalidToken(req);
+	UserProfile prof = us.loadProfile(userId);
 	if (Value(prof)["public"]["roles"].indexOf("_admin") == Value::npos)
 		return req.setError(403,"Forbidden");
-	UserID uid = us.findUser(userid);
+	UserID uid = us.findUser(victim);
 	if (uid.empty()) return req.setError(404,"Not found");
 	prof = us.loadProfile(uid);
 	req.setResult(Value(prof).replace("_id",json::undefined).replace("_rev",json::undefined));
@@ -409,14 +465,14 @@ void RpcInterface::rpcAdminUpdateAccount(RpcRequest req) {
 
 	auto args = req.getArgs();
 	StrViewA token = args[0].getString();
-	StrViewA userid = args[1].getString();
+	StrViewA victim = args[1].getString();
 	Value update = args[2];
-	UserToken::Info tinfo;
-	if (tok.parse(token,tinfo) != UserToken::valid) return sendInvalidToken(req);
-	UserProfile prof = us.loadProfile(tinfo.userId);
+	Value userId = tok.check(token,"root");
+	if (!userId.defined()) return sendInvalidToken(req);
+	UserProfile prof = us.loadProfile(userId);
 	if (Value(prof)["public"]["roles"].indexOf("_admin") == Value::npos)
 		return req.setError(403,"Forbidden");
-	UserID uid = us.findUser(userid);
+	UserID uid = us.findUser(victim);
 	if (uid.empty()) return req.setError(404,"Not found");
 	prof = us.loadProfile(uid);
 	prof = Value(prof).merge(Object("public",update));
@@ -446,9 +502,9 @@ void loginsrv::RpcInterface::rpcUserVerifyOTP(RpcRequest req) {
 	if (!req.checkArgs(Value(json::array,{"Token"}))) return req.setArgError();
 	auto args = req.getArgs();
 	StrViewA token = args[0].getString();
-	UserToken::Info tinfo;
-	if (tok.parse(token,tinfo)) return sendInvalidToken(req);
-	UserProfile prof = us.loadProfile(UserID(tinfo.userId));
+	Value userId = tok.check(token,"root");
+	if (!userId.defined()) return sendInvalidToken(req);
+	UserProfile prof = us.loadProfile(UserID(userId));
 	Value nfo = prof.getHOTPInfo();
 	if (nfo.isNull()) req.setError(404,"No HTOP informations are available");
 	else req.setResult(nfo);

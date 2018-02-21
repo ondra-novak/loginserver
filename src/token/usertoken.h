@@ -22,9 +22,8 @@ public:
 	struct Info {
 		time_t created;
 		time_t expireTime;
-		String purpose; //purpose
+		Value purpose; //purpose
 		Value userId;
-
 	};
 
 	enum Status {
@@ -34,7 +33,7 @@ public:
 	};
 
 
-	Info prepare(Value userId, const String &purpose, unsigned int expire_s);
+	Info prepare(Value userId, const Value &purpose, unsigned int expire_s);
 
 
 	String create(const Info &info);
@@ -51,7 +50,8 @@ public:
 	Status parse(const StrViewA token, Info &info);
 
 
-	bool check(const StrViewA token, const StrViewA expectedRole, Value &userId);
+	Value check(const StrViewA &token, const StrViewA &purpose);
+	Value check(const StrViewA &token, const StringView<StrViewA> &listPurposes);
 
 
 	typedef time_t (*TimeSource)();

@@ -67,7 +67,7 @@ bool GoogleOTP::checkTimeCode(unsigned int code, unsigned int accuracy) const {
 	time(&c);
 	c/=30;
 	if (getCode(c) == code) return true;
-	for (unsigned int i = 1; i < accuracy; i++) {
+	for (unsigned int i = 1; i <= accuracy; i++) {
 		if (getCode(c-i) == code || getCode(c+i) == code) return true;
 	}
 	return false;

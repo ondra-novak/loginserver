@@ -38,7 +38,11 @@ static Value customRules = json::Value::fromString(R"json(
 "DomainPart":"[a-z-0-9]",
 "Token":["explode",".",[[2],"base64url","base64url"]],
 "Code":["explode","-",[[2],"digits","digits","digits"]],
-"Password":["minsize",8]
+"Password":["minsize",8],
+"PurposeItem":["all","[a-zA-Z0-9_]",["!","Refresh"]],
+"PurposeList":[[],"PurposeItem"],
+"Purpose":["Refresh","PurposeItem","PurposeList",[[2],"Refresh","PurposeList"]],
+"Refresh":"'refresh"
 }
 
 )json");
@@ -85,8 +89,6 @@ public:
 	virtual bool verifyCaptcha(const StrViewA response)override;
 
 	virtual String getOTPLabel(const UserProfile &profile)override;
-
-	virtual unsigned int getCodeExpirationSec()override;
 
 
 	virtual Value getUserConfig(const StrViewA key) override;
@@ -146,9 +148,6 @@ bool Svcs::verifyCaptcha(const StrViewA response) {
 String Svcs::getOTPLabel(const UserProfile &profile) {
 	return String(StrViewA(otpissuer));
 
-}
-unsigned int Svcs::getCodeExpirationSec() {
-	return 3*24*60*60;
 }
 
 Value Svcs::getUserConfig(const StrViewA key) {
@@ -237,13 +236,16 @@ int main(int argc, char **argv) {
 
 
 	UserToken tok(Token::privateKey, String(privateKey));
-	tok.setExpireTime(loginCfg.mandatory["token_expiration"].getUInt());
-	tok.setRefreshExpireTime(loginCfg.mandatory["token_refresh_expiration"].getUInt());
+	RpcInterface::Config ifccfg;
+	ifccfg.mailCodeExpiration_sec = loginCfg.mandatory["mail_code_expires"].getUInt();
+	ifccfg.refreshTokenExpiration_sec = loginCfg.mandatory["refresh_token_expires"].getUInt();
+	ifccfg.rootTokenExpiration_sec = loginCfg.mandatory["token_expires"].getUInt();
+
 	UserServices us(couchdb);
 	Svcs ifcsvc(templatePrefix,sendCmd,captcha,otpIssuer,userConfigJson);
 
 
-	RpcInterface ifc(us, tok, ifcsvc);
+	RpcInterface ifc(us, tok, ifcsvc, ifccfg);
 
 
 
