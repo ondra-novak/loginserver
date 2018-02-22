@@ -73,12 +73,19 @@ public:
 			const std::string &sendCmd,
 			const std::string &captchaCmd,
 			const std::string &otpissuer,
+			const std::string &reportCmd,
 			const Value &usercfg
 		):templatePrefix(templatePrefix)
 		,sendCmd(sendCmd)
 		,captchaCmd(captchaCmd)
 		,otpissuer(otpissuer)
-		,usercfg(usercfg) {}
+		,reportCmd(reportCmd)
+		,usercfg(usercfg)
+		,reportF(nullptr) {}
+
+	~Svcs() {
+		if (reportF) pclose(reportF);
+	}
 
 	virtual void sendMail(const StrViewA email,
 			const StrViewA templateName,
@@ -92,13 +99,20 @@ public:
 
 
 	virtual Value getUserConfig(const StrViewA key) override;
+
+	virtual void report(const Value userId, const StrViewA &action, Value data) override;
+
 protected:
 
 	std::string templatePrefix;
 	std::string sendCmd;
 	std::string captchaCmd;
 	std::string otpissuer;
+	std::string reportCmd;
 	Value usercfg;
+
+	std::mutex lock;
+	FILE *reportF;
 
 
 };
@@ -155,6 +169,30 @@ Value Svcs::getUserConfig(const StrViewA key) {
 	Value c = usercfg[key];
 	if (c.defined()) return c;
 	return usercfg[""];
+}
+
+void Svcs::report(const Value userId, const StrViewA &action, Value data)  {
+	Object repObj;
+	time_t now;
+	time(&now);
+	repObj("time", std::size_t(now))
+		  ("user", userId)
+		  ("event", action)
+		  ("data", data);
+	std::lock_guard<std::mutex> _(lock);
+	if (reportF == nullptr) {
+		reportF = popen(reportCmd.c_str(),"w");
+		if (reportF == nullptr) {
+			logError("Can't initialize report stream. Cmd: $1 - error $2", reportCmd, errno);
+			return;
+		}
+	}
+	Value(repObj).toFile(reportF);
+	if (fputs("\n",reportF) < 0 || fflush(reportF) < 0) {
+		unsigned int res = pclose(reportF);
+		logError("The report process (cmd: $1) has died with exit code: $2", reportCmd, res);
+		reportF = nullptr;
+	}
 }
 
 
@@ -230,6 +268,7 @@ int main(int argc, char **argv) {
 	std::string templatePrefix = loginCfg["mail_template_prefix"].getString();
 	std::string captcha = loginCfg["captcha_svc"].getPath();
 	std::string otpIssuer = loginCfg.mandatory["otp_issuer"].getString();
+	std::string reportSvc = loginCfg.mandatory["report_svc"].getPath();
 
 
 	Value userConfigJson = readUserConfig(userConfig);
@@ -244,7 +283,7 @@ int main(int argc, char **argv) {
 	ifccfg.userLockWait = loginCfg.mandatory["login_failure_lock_time"].getUInt();
 
 	UserServices us(couchdb);
-	Svcs ifcsvc(templatePrefix,sendCmd,captcha,otpIssuer,userConfigJson);
+	Svcs ifcsvc(templatePrefix,sendCmd,captcha,otpIssuer,reportSvc,userConfigJson);
 
 
 	RpcInterface ifc(us, tok, ifcsvc, ifccfg);

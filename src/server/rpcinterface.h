@@ -47,6 +47,8 @@ public:
 		virtual String getOTPLabel(const UserProfile &profile)  = 0;
 
 		virtual Value getUserConfig(const StrViewA key) = 0;
+
+		virtual void report(const Value userId, const StrViewA &action, Value data = Value()) = 0;
 	};
 
 	struct Config {

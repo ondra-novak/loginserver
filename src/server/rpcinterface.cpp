@@ -85,6 +85,7 @@ void RpcInterface::rpcTokenRevokeAll(RpcRequest req) {
 	time_t now;time(&now);
 	prof("token_revoke", (std::size_t)now);
 	us.storeProfile(prof);
+	svc.report(prof.getIDValue(), "revokeAllTokens");
 	req.setResult(true);
 }
 
@@ -115,6 +116,7 @@ void RpcInterface::rpcResetPassword(RpcRequest req) {
 			sendInvalidToken(req);
 	}
 	us.storeProfile(prof);
+	svc.report(prof.getIDValue(), "lostPwdReset");
 }
 
 
@@ -137,6 +139,8 @@ void RpcInterface::rpcRequestResetPassword(RpcRequest req) {
 	svc.sendMail(email,"resetpwd",Object("code", code));
 
 	req.setResult(true);
+	svc.report(prof.getIDValue(), "lostPwdResetReq");
+
 }
 
 void RpcInterface::rpcGetAccountName(RpcRequest req) {
@@ -190,6 +194,8 @@ void RpcInterface::rpcSaveAccount(RpcRequest req) {
 	p = Value(p).merge(Object("public",update));
 	us.storeProfile(p);
 	req.setResult(Value(p)["public"]);
+	svc.report(p.getIDValue(), "accountUpdate", update);
+
 }
 
 void RpcInterface::rpcUserPrepareOTP(RpcRequest req) {
@@ -211,6 +217,8 @@ void RpcInterface::rpcUserPrepareOTP(RpcRequest req) {
 	urlbuff << "otpauth://" << type << "/" << svc.getOTPLabel(prof) << "?secret=" << StrViewA(secret);
 	if (type=="hotp") urlbuff << "&counter=0";
 	req.setResult(urlbuff.str());
+	svc.report(prof.getIDValue(), "prepareOTP", type);
+
 
 }
 
@@ -233,6 +241,7 @@ void RpcInterface::rpcUserEnableOTP(RpcRequest req) {
 
 	us.storeProfile(prof);
 	req.setResult(true);
+	svc.report(prof.getIDValue(), "enableOTP", enable);
 
 }
 
@@ -251,19 +260,19 @@ void RpcInterface::rpcTokenParse(RpcRequest req) {
 
 	Object result;
 
+	result("user", tinfo.userId)
+		  ("created", tinfo.created)
+		  ("expires", tinfo.expireTime)
+		  ("purpose", tinfo.purpose)
+		  ("roles", tinfo.roles)
+		  ("raw", tok.parseToken(token).toString());
+
 	switch (st) {
 	case UserToken::expired:
-		if (!req.getContext()["inspect"].getBool()) {
-			return req.setError(410,"Token expired");
-		} else {
-			result("status","expired");
-		}//nobreak
+		result("status","expired");
+		break;
 	case UserToken::valid:
-		result("user", tinfo.userId)
-			  ("created", tinfo.created)
-			  ("expires", tinfo.expireTime)
-			  ("purpose", tinfo.purpose)
-			  ("roles", tinfo.roles);
+		result("status","valid");
 		break;
 	case UserToken::invalid:
 		return sendInvalidToken(req);
@@ -435,11 +444,13 @@ void RpcInterface::rpcLogin(RpcRequest req) {
 					if (cnt) data = Object("counter",cnt);
 					//lock when invalid OTP to prevent brutalforcing OTP
 					ulock.lockUser(user, locktime);
+					svc.report(prof.getIDValue(), "loginFailOTP");
 					return req.setError(401,"Invalid credentials",data);
 				} else {
 					us.storeProfile(prof);
 				}
 			} else {
+				svc.report(prof.getIDValue(), "loginFailNoOTP");
 				return req.setError(402,"OTP Required");
 			}
 		}
@@ -460,10 +471,13 @@ void RpcInterface::rpcLogin(RpcRequest req) {
 		//unlock user now (and perform maintenance)
 		ulock.unlockUser(user, now);
 		req.setResult(res);
+		svc.report(prof.getIDValue(), "loginSuccess");
 	} else {
 		//lock user
 		ulock.lockUser(user, locktime);
 		req.setError(401,"Invalid credentials");
+		svc.report(prof.getIDValue(), "loginFailPwd");
+
 	}
 }
 
@@ -481,11 +495,13 @@ void RpcInterface::rpcSetPassword(RpcRequest req) {
 	UserProfile prof = us.loadProfile(UserID(userId));
 	if (!prof.checkPassword(old_password)) {
 		req.setError(403,"Password doesn't match");
+		svc.report(prof.getIDValue(), "setPwdFailed");
 	} else {
 		prof.setPassword(password);
 		us.storeProfile(prof);
 		svc.sendMail(prof["public"]["email"].getString(),"pwdchanged",Object());
 		req.setResult(true);
+		svc.report(prof.getIDValue(), "setPwdOk");
 	}
 }
 
@@ -503,6 +519,7 @@ void RpcInterface::rpcAdminLoadAccount(RpcRequest req) {
 	if (uid.empty()) return req.setError(404,"Not found");
 	UserProfile prof = us.loadProfile(uid);
 	req.setResult(Value(prof).replace("_id",json::undefined).replace("_rev",json::undefined));
+	svc.report(userId, "adminLoadAccount", uid);
 }
 
 void RpcInterface::rpcAdminUpdateAccount(RpcRequest req) {
@@ -526,6 +543,7 @@ void RpcInterface::rpcAdminUpdateAccount(RpcRequest req) {
 	prof = Value(prof).merge(update);
 	us.storeProfile(prof);
 	req.setResult(Value(prof).replace("_id",json::undefined).replace("_rev",json::undefined));
+	svc.report(prof.getIDValue(), "accountUpdateAdmin", {userId, update});
 }
 
 void RpcInterface::rpcUserCheckOTP(RpcRequest req) {
@@ -579,6 +597,7 @@ void RpcInterface::rpcAdminCreateUser(RpcRequest req) {
 	if (u.empty()) {
 		UserProfile p = us.createUser(newid);
 		us.storeProfile(p);
+		svc.report(userId, "adminCreateUser", u);
 		return rpcAdminLoadAccount(req);
 	} else {
 		return req.setError(409,"Already exists");
@@ -598,6 +617,7 @@ void RpcInterface::rpcAdminDeleteUser(RpcRequest req) {
 	prof.set("_deleted",true);
 	us.storeProfile(prof);
 	req.setResult(true);
+	svc.report(userId, "adminDeleteUser", u);
 }
 
 void RpcInterface::rpcAdminLogAsUser(RpcRequest req) {
@@ -621,6 +641,8 @@ void RpcInterface::rpcAdminLogAsUser(RpcRequest req) {
 	   ("config", ucfg);
 
 	req.setResult(res);
+	svc.report(userId, "adminLoginAsUser", u);
+
 
 }
 
@@ -638,6 +660,7 @@ void RpcInterface::rpcAdminSetPassword(RpcRequest req) {
 	prof.setPassword(password);
 	us.storeProfile(prof);
 	req.setResult(true);
+	svc.report(prof.getIDValue(), "setPwdOkAdmin");
 }
 
 
