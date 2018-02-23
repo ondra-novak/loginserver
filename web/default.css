@@ -1,0 +1,46 @@
+#anim {
+	display:flex;
+	position:fixed;
+	left:0;
+	top:0;
+	width: 100vw;
+	height: 100vh;
+	 align-items: center;
+    justify-content: center;
+}
+
+.dlg {
+	position:relative;
+	display:block;
+	max-width: 50%;
+	background-color: white;
+	border: 1px solid;
+	padding: 20px;
+	left: 0;
+	transition: all 0.5s ease-in-out;
+	opacity: 0;
+	top:10%;
+	transform: scale(1.5,1.5);
+	border-radius: 10px;
+	box-shadow: 10px 10px 5px #aaaaaa;
+}
+
+.dlg.animStateActive {
+	left: 0;
+	top:0;
+    opacity: 1;
+    transform: scale(1,1);
+}
+
+.dlg.animStateLeave {
+	top: -30%;
+    opacity: 0;
+}
+.dlg.animStateLeaveBack {
+    top: +30%;
+    opacity: 0;
+}
+.dlg.animStateEnterBack {
+    top: -30%;
+    opacity: 0;    
+}

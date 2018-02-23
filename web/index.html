@@ -2,6 +2,8 @@
 <html>
 <head>
 <script src='https://www.google.com/recaptcha/api.js'></script>
+<script src="js/dlganim.js" type="text/javascript"></script>
+<link href="default.css" media="all" rel="stylesheet" />
 </head>
 <body>
 <div class="g-recaptcha" data-sitekey="6Lem8UYUAAAAAB8YThTYDws-oR0JIvbPUwPbB85S"></div>
@@ -18,5 +20,16 @@ var interval = setInterval(function(){
 },1000);
 
 </script>
+
+<div class="dlg" id="test1"><h1>Some important dialog</h1></div>
+<div class="dlg" id="test2"><h2>Other important dialog</h1></div>
+<dlg id="anim"></dlg>
+
+<script>
+window.dlganim = new DialogAnim(window.anim);
+
+</script>
+
 </body>
 </html>
+
