@@ -112,6 +112,13 @@ private:
 	void sendInvalidToken(json::RpcRequest req);
 	void sendUserLocked(RpcRequest& req);
 	Value outTokenInfo(const UserToken::Info &info);
+
+	static StrViewA PURPOSE_REFRESH;
+	static StrViewA PURPOSE_CREATE;
+	static StrViewA PURPOSE_ACCOUNT;
+	static StrViewA PURPOSE_ACCOUNT_RO;
+	static StrViewA PURPOSE_ADMIN;
+	static StrViewA PURPOSE_ADMIN_RO;
 };
 
 
