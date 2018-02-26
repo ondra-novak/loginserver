@@ -1,4 +1,16 @@
-#anim {
+body {
+	font-family: sans-serif;
+	font-size: 14px;
+}
+
+button, input[type=text],input[type=password]{
+	padding: 10px;
+	border: 1px solid #888;
+	font-family: sans-serif;
+	font-size: 14px;
+}
+
+.dlg_playground {
 	display:flex;
 	position:fixed;
 	left:0;
@@ -6,41 +18,87 @@
 	width: 100vw;
 	height: 100vh;
 	 align-items: center;
-    justify-content: center;
+    justify-content: center;    
+    transition: all 0.2s;
+    transform: rotate(0deg);
 }
+
+.dlg_playground.hidden {
+	left:0;
+	top:0;
+	width: 0;
+	height:0;
+	transform: rotate(90deg);
+}
+
 
 .dlg {
 	position:relative;
 	display:block;
-	max-width: 50%;
+	width: 320px;
 	background-color: white;
 	border: 1px solid;
 	padding: 20px;
 	left: 0;
-	transition: all 0.5s ease-in-out;
+	transition: all 0.5s cubic-bezier(.4,0,.6,1); 
 	opacity: 0;
-	top:10%;
-	transform: scale(1.5,1.5);
+	left: 5%;
 	border-radius: 10px;
-	box-shadow: 10px 10px 5px #aaaaaa;
+}
+.dlg_playground .lightbox {
+	opacity: 0.5;
+	width: 100%;
+	height: 100%;
+	background-color: #ccc;
+	position: absolute;	
 }
 
 .dlg.animStateActive {
 	left: 0;
 	top:0;
     opacity: 1;
-    transform: scale(1,1);
 }
 
 .dlg.animStateLeave {
-	top: -30%;
+	left: -20%;
     opacity: 0;
 }
 .dlg.animStateLeaveBack {
-    top: +30%;
+    left: +20%;
     opacity: 0;
 }
 .dlg.animStateEnterBack {
-    top: -30%;
+	left: -20%;
     opacity: 0;    
+}
+
+.templ_loginPage, .templ_createAccPage {
+	text-align:center;
+}
+.templ_loginPage label, .templ_createAccPage label {
+	display:block;	
+	
+}
+.templ_loginPage input, .templ_createAccPage input {
+	display:block;
+	width: 80%;
+	margin: auto;
+}
+
+win-title {
+	display: block;
+	font-size: 20px;
+	font-weight: bold;
+	margin-bottom: 10px;	
+}
+
+.hiderror {
+	display:none;
+	color:red;
+	font-size: 14px;
+	font-style: italic;
+}
+
+.hiderror.mark {
+	display:block;
 }
