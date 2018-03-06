@@ -24,6 +24,7 @@ function start() {
 			ev.preventDefault();
 			sendCommand(rpc, input.innerText).then(function(){			
 				input.focus();
+				window.scrollTo(0,document.body.scrollHeight);
 			});
 			input.innerText="";
 		} else if (x == 9) {
@@ -38,8 +39,11 @@ function sendCommand(rpc, cmd) {
 	var parsed = parseCmd(cmd);
 	if (parsed) {
 		outputCommand(parsed.method, parsed.args);
+		var d = document.createElement("div");
+		d.classList.add("outdata");
+		d.classList.add("pending");
 		return rpc.call2(parsed.method, parsed.args)
-			.then(outputResult, outputError);		
+			.then(outputResult.bind(null,d), outputError.bind(null,d));		
 	} else {
 		throw "Invalid command";
 	}
@@ -61,19 +65,15 @@ function outputCommand(method, args) {
 	window.output.appendChild(d);
 }
 
-function outputResult(result) {
-	var d = document.createElement("div");
-	d.classList.add("outdata");
-	d.classList.add("result");
+function outputResult(d,result) {
+	d.classList.replace("pending","result");
 	var json = formatJson(result);
 	d.appendChild(json);
 	window.output.appendChild(d);	
 }
 
-function outputError(result) {
-	var d = document.createElement("div");
-	d.classList.add("outdata");
-	d.classList.add("error");
+function outputError(d,result) {
+	d.classList.replace("pending","error");
 	var json = formatJson(result);
 	d.appendChild(json);
 	window.output.appendChild(d);	

@@ -1,7 +1,19 @@
 body {
 	background-color:#333;
-	 font-family: 'Maven Pro';font-size: 18px;
+	 font-family: 'Maven Pro';font-size: 2vh;
 	 color: #CCC;
+	 margin:0;
+}
+@media screen and (orientation:portrait) {
+body {
+  font-size: 3vw;
+}
+}
+/* Landscape */
+@media screen and (orientation:landscape) {
+body {
+  font-size: 2vh;
+}
 }
 .panel {
 background-color: #444;
@@ -26,7 +38,7 @@ x-itm.string {
 	font-weight:normal;
 }
 x-itm.number {
-	color: #ea58d3;	
+	color: #e6ff00;	
 	font-weight:normal;
 }
 x-itm.keyvalue {
@@ -46,15 +58,17 @@ x-itm.value {
 }
 x-itm.object,x-itm.array {
 	font-weight:bold;
-	color: #CC8;
+	color: #fff;
 }
 x-itm.boolean {
 	font-weight: bold;
-	color: #ff5374;
+	color: #ff7992;
+	text-decoration: underline;
 }
 x-itm.null {
 	font-weight: bold;
 	color: #ff5374;	
+	text-decoration: underline;
 }
 
 .outdata.result {
