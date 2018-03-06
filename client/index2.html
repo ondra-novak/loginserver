@@ -44,6 +44,7 @@ function clearElement(elem) {
 	while (elem.firstChild) elem.removeChild(elem.firstChild);
 }
 
+
 function addControls(rpc, root, cmd) {
 	root.classList.add("row");
     var res = document.createElement("div");
@@ -51,7 +52,8 @@ function addControls(rpc, root, cmd) {
     res.classList.add("pending");
 	var reloadButton = document.createElement("button");
 	reloadButton.classList.add("reload");
-    reloadButton.addEventListener("click", function() {    	
+    reloadButton.addEventListener("click", function(e) {  
+    	e.stopPropagation();  	
     	res.classList.remove("result");
     	res.classList.remove("error");
     	res.classList.add("pending");
@@ -62,11 +64,20 @@ function addControls(rpc, root, cmd) {
     });
     var closeButton = document.createElement("button");    
     closeButton.classList.add("close");
-    closeButton.addEventListener("click", function() {
-    	root.classList.add("disappear");
+    closeButton.addEventListener("click", function(e) {
+    	e.stopPropagation();
+    	var h = root.clientHeight;
+    	root.style.opacity="1";
+    	root.style.height=h+"px";	
+    	root.style.overflow="hidden";
+    	root.style.transition="all 0.5s";
+    	setTimeout(function() {
+    		root.style.opacity="0";
+    		root.style.height="0";
+    	},50);
     	setTimeout(function() {
     		root.parentElement.removeChild(root);
-    	},500);
+    	},600);
     });
     var ln = outputCommand(root,cmd.method, cmd.args);
     ln.appendChild(reloadButton);
@@ -101,22 +112,27 @@ function outputCommand(elem, method, args) {
 	c.appendChild(document.createTextNode(method));
 	d.appendChild(c);
 	var p = document.createElement("span");
-	p.classList.add("command");
-	var strargs = JSON.stringify(args);
+	p.classList.add("params");
+	var strargs = JSON.stringify(args,null," ");
+	var strargs2 = JSON.stringify(args,null);
 	p.appendChild(document.createTextNode(strargs));
 	d.appendChild(p);
     elem.appendChild(d);   
 
-    d.addEventListener("click", function(){
-    	window.input.innerText =  method+" "+strargs;
-    });
+	var lstn = function(){
+    	window.input.innerText =  method+" "+strargs2;
+    	window.input.focus();
+    }
+
+    c.addEventListener("click", lstn);
+    p.addEventListener("click", lstn);
     return d;
 }
 
 function outputResult(d,result) {
 	d.classList.replace("pending","result");
 	var json = formatJson(result);
-	d.appendChild(json);
+	d.appendChild(json);	
 }
 
 function outputError(d,result) {

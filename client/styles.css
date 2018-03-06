@@ -154,16 +154,19 @@ button.reload{
 	
 }
 div.row {
-	position:relative;
-	transform: scale(1,1);
-	transition: all 0.5s;
-	left: 0;
-	top:0;
-	opacity: 1;	
+	position:relative;		
+	overflow: hidden;
 	
 }
 
-div.row.disappear {
-	top: 100%;
-	opacity: 0;
+.outdata.command .command {
+	color: yellow;
+	margin-right: 0.2em;
+	cursor: pointer;
+}
+
+
+.outdata.command .params{
+	color: #CCC;	
+	cursor: pointer;
 }
