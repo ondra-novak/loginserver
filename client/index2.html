@@ -24,7 +24,6 @@ function start() {
 			ev.preventDefault();
 			sendCommand(rpc, input.innerText).then(function(){			
 				input.focus();
-				window.scrollTo(0,document.body.scrollHeight);
 			});
 			input.innerText="";
 		} else if (x == 9) {
@@ -35,22 +34,65 @@ function start() {
 	input.focus();
 }
 
+function scroll() {
+    window.scrollTo(0,document.body.scrollHeight);	
+    window.input.focus();
+}
+
+
+function clearElement(elem) {
+	while (elem.firstChild) elem.removeChild(elem.firstChild);
+}
+
+function addControls(rpc, root, cmd) {
+	root.classList.add("row");
+    var res = document.createElement("div");
+    res.classList.add("outdata");
+    res.classList.add("pending");
+	var reloadButton = document.createElement("button");
+	reloadButton.classList.add("reload");
+    reloadButton.addEventListener("click", function() {    	
+    	res.classList.remove("result");
+    	res.classList.remove("error");
+    	res.classList.add("pending");
+    	rpc.call2(cmd.method, cmd.args)
+    	   .then(function(x) {clearElement(res); return x;},
+    			   function(x) {clearElement(res); throw x;})
+    	   .then(outputResult.bind(null, res),outputError.bind(null,res));
+    });
+    var closeButton = document.createElement("button");    
+    closeButton.classList.add("close");
+    closeButton.addEventListener("click", function() {
+    	root.classList.add("disappear");
+    	setTimeout(function() {
+    		root.parentElement.removeChild(root);
+    	},500);
+    });
+    var ln = outputCommand(root,cmd.method, cmd.args);
+    ln.appendChild(reloadButton);
+    ln.appendChild(closeButton);
+    root.appendChild(res);
+    return res;
+}
+
 function sendCommand(rpc, cmd) {
 	var parsed = parseCmd(cmd);
 	if (parsed) {
-		outputCommand(parsed.method, parsed.args);
-		var d = document.createElement("div");
-		d.classList.add("outdata");
-		d.classList.add("pending");
+		var root = document.createElement("div");
+		var d = addControls(rpc,root, parsed);
+	    window.output.appendChild(root);
+		scroll();
 		return rpc.call2(parsed.method, parsed.args)
-			.then(outputResult.bind(null,d), outputError.bind(null,d));		
+			.then(outputResult.bind(null,d), outputError.bind(null,d))			
+			.then(scroll);
+			
 	} else {
 		throw "Invalid command";
 	}
 }
 	
 
-function outputCommand(method, args) {
+function outputCommand(elem, method, args) {
 	var d = document.createElement("div");
 	d.classList.add("outdata");
 	d.classList.add("command");
@@ -60,23 +102,27 @@ function outputCommand(method, args) {
 	d.appendChild(c);
 	var p = document.createElement("span");
 	p.classList.add("command");
-	p.appendChild(document.createTextNode(JSON.stringify(args)));
+	var strargs = JSON.stringify(args);
+	p.appendChild(document.createTextNode(strargs));
 	d.appendChild(p);
-	window.output.appendChild(d);
+    elem.appendChild(d);   
+
+    d.addEventListener("click", function(){
+    	window.input.innerText =  method+" "+strargs;
+    });
+    return d;
 }
 
 function outputResult(d,result) {
 	d.classList.replace("pending","result");
 	var json = formatJson(result);
 	d.appendChild(json);
-	window.output.appendChild(d);	
 }
 
 function outputError(d,result) {
 	d.classList.replace("pending","error");
 	var json = formatJson(result);
 	d.appendChild(json);
-	window.output.appendChild(d);	
 }
 
 function formatJson(json) {	
@@ -103,7 +149,6 @@ function formatJson(json) {
 			for (var x in json) {
 				var dr = document.createElement("x-itm");
 				if (prevEl)prevEl.appendChild(document.createTextNode(", "));
-				prevEl = dr;
 				var name = "\"" + x + "\"";
 				dr.classList.add("keyvalue");
 				var dk = document.createElement("x-itm");
@@ -116,6 +161,7 @@ function formatJson(json) {
 				dr.appendChild(document.createTextNode(":"));
 				dr.appendChild(dv);
 				d.appendChild(dr);
+				prevEl = dv;
 			}
 			d.appendChild(document.createTextNode("}"));
 		}
@@ -129,7 +175,7 @@ function formatJson(json) {
 }
 	
 function parseCmd(cmd) {
-	var i1 = /^ *([-a-zA-Z0-9_.]+)[^\[{]*(.*)$/;
+	var i1 = /^ *([-a-zA-Z0-9_.]+)[^\[{]*([\s\S]*)$/;
 	var m = i1.exec(cmd);
 	if (m[2].length) {
 		return {
