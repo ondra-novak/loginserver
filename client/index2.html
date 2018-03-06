@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html>
+<head>
+<link href='https://fonts.googleapis.com/css?family=Maven Pro' rel='stylesheet'>
+<link href='styles.css' rel='stylesheet'>
+<title>RPC Console</title>
+</head>
+<body onload="start()">
+<script type="text/javascript" src="rpc.js"></script>
+<div class="output" id="output"></div>
+<div class="panel">
+<div class="label"> Command: </div>
+<div class="input" id="input" contenteditable="true"></div>
+</div>
+
+<script type="text/javascript">
+"use strict";
+function start() {
+	var rpc = new RpcClient("");
+	var input = window.input;
+	input.addEventListener("keydown", function(ev) {
+		var x = ev.which || ev.keyCode;
+		if (x == 13) {
+			ev.preventDefault();
+			sendCommand(rpc, input.innerText).then(function(){			
+				input.focus();
+				window.scrollTo(0,document.body.scrollHeight);
+			});
+			input.innerText="";
+		} else if (x == 9) {
+			ev.preventDefault();
+			showHelp(rpc, input.innerText);
+		}
+	});
+	input.focus();
+}
+
+function sendCommand(rpc, cmd) {
+	var parsed = parseCmd(cmd);
+	if (parsed) {
+		outputCommand(parsed.method, parsed.args);
+		var d = document.createElement("div");
+		d.classList.add("outdata");
+		d.classList.add("pending");
+		return rpc.call2(parsed.method, parsed.args)
+			.then(outputResult.bind(null,d), outputError.bind(null,d));		
+	} else {
+		throw "Invalid command";
+	}
+}
+	
+
+function outputCommand(method, args) {
+	var d = document.createElement("div");
+	d.classList.add("outdata");
+	d.classList.add("command");
+	var c = document.createElement("span")
+	c.classList.add("command");
+	c.appendChild(document.createTextNode(method));
+	d.appendChild(c);
+	var p = document.createElement("span");
+	p.classList.add("command");
+	p.appendChild(document.createTextNode(JSON.stringify(args)));
+	d.appendChild(p);
+	window.output.appendChild(d);
+}
+
+function outputResult(d,result) {
+	d.classList.replace("pending","result");
+	var json = formatJson(result);
+	d.appendChild(json);
+	window.output.appendChild(d);	
+}
+
+function outputError(d,result) {
+	d.classList.replace("pending","error");
+	var json = formatJson(result);
+	d.appendChild(json);
+	window.output.appendChild(d);	
+}
+
+function formatJson(json) {	
+	var d = document.createElement("x-itm");
+
+	if (json === null) {
+		d.classList.add("null");
+		d.appendChild(document.createTextNode("null"));		
+	} else if (typeof json == "object") {
+		if (Array.isArray(json)) {
+			d.classList.add("array");
+			var len = json.length;
+			d.appendChild(document.createTextNode("["));
+			for (var i = 0; i < len; i++) {
+				if (i) d.appendChild(document.createTextNode(", "));
+				d.appendChild(formatJson(json[i]));
+			}
+			d.appendChild(document.createTextNode("]"));
+			
+		} else {
+			d.classList.add(typeof json);
+			d.appendChild(document.createTextNode("{"));
+			var prevEl = null;
+			for (var x in json) {
+				var dr = document.createElement("x-itm");
+				if (prevEl)prevEl.appendChild(document.createTextNode(", "));
+				prevEl = dr;
+				var name = "\"" + x + "\"";
+				dr.classList.add("keyvalue");
+				var dk = document.createElement("x-itm");
+				dk.classList.add("key");
+				dk.appendChild(document.createTextNode(name));
+				var dv = document.createElement("x-itm");
+				dv.classList.add("value");
+				dv.appendChild(formatJson(json[x]));
+				dr.appendChild(dk);
+				dr.appendChild(document.createTextNode(":"));
+				dr.appendChild(dv);
+				d.appendChild(dr);
+			}
+			d.appendChild(document.createTextNode("}"));
+		}
+	} else {
+		d.classList.add(typeof json);
+		var x = json.toString();
+		if (typeof json == "string") x = "\""  + x +"\"";
+		d.appendChild(document.createTextNode(x));
+	} 
+	return d;
+}
+	
+function parseCmd(cmd) {
+	var i1 = /^ *([-a-zA-Z0-9_.]+)[^\[{]*(.*)$/;
+	var m = i1.exec(cmd);
+	if (m[2].length) {
+		return {
+			method: m[1],
+			args: eval("("+m[2]+")")
+		};
+	} else {
+		return null;
+	}
+}
+
+</script>
+</body>
+</html>
