@@ -5,6 +5,11 @@ var RpcClient = (function(){
 	function RpcClient(url) {
 		this.url = url;
 		this.nextId = 1;
+		this.context={};
+	};
+	
+	function isObjEmpty(obj) {
+		Object.keys(obj).length === 0; 
 	}
 	
 	RpcClient.prototype.call2 = function(method,args,retryCnt) {
@@ -55,6 +60,9 @@ var RpcClient = (function(){
 						if (jres.error) {
 							fail(jres.error);
 						} else {
+							if (jres.context) {
+								this.updateContext(jres.context);
+							}
 							ok(jres.result);
 						}
 					}
@@ -63,23 +71,31 @@ var RpcClient = (function(){
 			xhr.send(JSON.stringify(req));
 			
 		}.bind(this));
+	};
+	
+	RpcClient.prototype.updateContext = function(newCtx) {
+		for (var i in newCtx) {
+			if (newCtx[i] === null) delete this.context[i];
+			else this.context[i] = newCtx[i];
+		}
 	}
+	
 	
 	RpcClient.prototype.call = function(method) {
 		var args = Array.prototype.slice.call(arguments,1);
 		return this.call2(method,args,0);
-	}
+	};
 	
 	RpcClient.prototype.onConnectionError = function(details, retryCnt, callback) {
 		if (retryCnt > 3) callback(false);
 		else {
 			setTimeout(callback.bind(null,true),retryCnt*500);
 		}
-	}
+	};
 	
 	RpcClient.prototype.createMethod = function(methodName) {
 		return this.call.bind(this, methodName);
-	}
+	};
 	
 	RpcClient.prototype.methods = function(retryCnt) {
 		if (!retryCnt) retryCnt = 0;
@@ -123,7 +139,7 @@ var RpcClient = (function(){
 			}.bind(this);
 			xhr.send("");
 		}.bind(this));		
-	}
+	};
 	
 	RpcClient.prototype.createObject = function(prefix) {
 		return this.methods().then(function(m) {
@@ -160,7 +176,7 @@ var RpcClient = (function(){
 			}.bind(this));
 			return obj;
 		}.bind(this));		
-	}
+	};
 	
 	return RpcClient;
 })();
