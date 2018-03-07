@@ -5,60 +5,142 @@ body {
 	color: #CCC;
 	margin:0;
 }
-.panel {
-background-color: #444;
-padding: 5px;
-display:flex;
-position:sticky;
-bottom: 0px;
+.panel {background-color: #444;padding: 5px;display:flex;position:sticky;bottom: 0px;overflow: hidden;}
+
+.input_outer {
+flex-grow: 1;
 }
+
+.quickhelp {
+	background-color: #555;
+	max-height: 40vh;
+	overflow-y:auto;
+	overflow-x:hidden;
+	transition: all 0.4s;
+}
+.quickhelp.empty {
+	max-height: 0vh;
+	overflow-y:hidden;
+}
+.quickhelp.empty.pending,.quickhelp.pending {
+	max-height: 0vh;
+	overflow-y:hidden;
+	max-height: 100px	;
+}
+
+.label {
+	transition: all 0.2s;
+	transform: scale(1,1) translate(0,0);	
+	cursor: pointer;
+	width:5em;
+	padding: 5px 5px 0 0;
+	text-shadow: 0px 0px 0px white;
+	flex-grow: 0;	
+	transform-origin: 50% 20px;
+	font-weight:400;
+}
+.label:hover {
+	transform: scale(1.1,1.1);
+	text-shadow: 0px 0px 8px white;
+	font-weight:600;
+}
+.label:active {
+	transform: scale(1.0,1.0);		
+}
+
+button {
+	transition: all 0.3s;
+	transform: scale(1,1);
+}
+
+button:hover {
+	transform: scale(1.5,1.5);
+}
+button:active {
+	transform: scale(1,1);
+}
+
+.quickhelp > div:first-child {
+	margin-top: 5px;
+}
+.quickhelp > div:last-child {
+	margin-bottom: 5px;
+}
+
+.quickhelp > div {
+	padding-left: 5px;
+	padding-right: 5px;	
+	cursor: pointer;
+	transition: transform 0.3s;
+	transform: scale(1,1) translate(0,0);
+	transform-origin: 0% 50%;
+	text-shadow: 0 0 0;	
+}	
+
+.quickhelp > div:hover {
+	transform: scale(1.1,1.1);
+	text-shadow: 0 0 8px black;
+	color:white;
+}	
+.quickhelp > div:active {
+	transform: scale(1,1);
+	background-color: #A55
+}	
 
 .input {
 border: 1px solid black;
 background-color:#222;
 padding: 5px;
-flex-grow: 1;
-}
-.label {
-padding: 5px;
-flex-grow: 0;
 }
 
-x-itm.string {
+json-string {
 	color: #AAFFAA;
 	font-weight:normal;
+	text-shadow: none;
 }
-x-itm.number {
-	color: #e6ff00;	
+json-number {
+	color: #fff596;	
 	font-weight:normal;
+	text-shadow: none;
 }
-x-itm.keyvalue {
+json-pair {
 	display:table;		
+	text-shadow: none;
+	margin-left: 1em;
 }
-x-itm.key {
+json-key {
 	display:table-cell;
 	color:white;
-	font-weight:normal;	
-
+	font-weight:600;	
 }
-x-itm.value {
+json-value {
 	display:table-cell;
 	font-weight:normal;
 }
-x-itm.object,x-itm.array {
+json-object,json-array {
 	font-weight:bold;
 	color: #fff;
 	vertical-align: baseline;
+	text-shadow: 2px 2px 4px black;
 }
-x-itm.boolean {
+json-boolean {
 	font-weight: bold;
-	color: #ff7992;
-	text-decoration: underline;
+	color: #79fffd;
+	text-shadow: 2px 2px 4px black;
 }
-x-itm.null {
+json-null {
 	font-weight: bold;
 	color: #ff5374;	
-	text-decoration: underline;
+	text-shadow: 2px 2px 4px black;
+}
+
+json-array > json-object {
+	display:block;	
+	margin-left: 1em;
+}
+
+.outdata {
+	transition: all 0.5s;
 }
 
 .outdata.result {
@@ -69,6 +151,7 @@ x-itm.null {
 	padding: 5px 38px;
 	margin: 3px;
 	background-color: #233;
+	opacity: 1;
 }
 .outdata.error {
 	background-color: #522;
@@ -78,6 +161,7 @@ x-itm.null {
 	background-position: 3px 5px;
 	padding: 5px 38px;
 	margin: 3px;
+	opacity: 1;
 }
 .outdata.command {
 	font-weight: bold;
@@ -89,15 +173,16 @@ x-itm.null {
 	box-sizing: border-box; 
 	width: 100%;
 }
-.outdata.pending {
+.outdata.pending,.quickhelp.pending {
 	padding: 5px 38px;	
 	margin: 3px;
 	min-height: 40px;
 	position: relative;
 	z-index: 0;
+	opacity: 0.5;
 
 }
-.outdata.pending:before
+.outdata.pending:before,.quickhelp.pending:before
 {
 	background-repeat: no-repeat;
 	background-position: 3px 5px;
@@ -162,11 +247,35 @@ div.row {
 .outdata.command .command {
 	color: yellow;
 	margin-right: 0.2em;
+}
+.outdata.command .command, .outdata.command .params {
+	transform: translate(0,0);
+	transition: all 0.2s;
+	display:inline-block;
 	cursor: pointer;
 }
+.outdata.command:active .command,.outdata.command:active .params {
+	transform: translate(2px,2px);
+}
+.outdata.command:hover .command,.outdata.command:hover .params {
+	text-shadow: 0px 0px 16px white;
+}
 
-
-.outdata.command .params{
-	color: #CCC;	
-	cursor: pointer;
+.context_list {
+	display: table;
+	font-size: 12px;
+}
+.context_list > div{
+	display:table-row;	
+}
+.context_list > div > div{
+	display: table-cell;
+	padding: 0px 2px
+}
+.context_list button {
+	border:0;
+	background-color: transparent;
+	color: #F88;
+	text-shadow: 1px 1px 4px black;
+	cursor:pointer;
 }
