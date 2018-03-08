@@ -33,6 +33,9 @@ var RpcClient = (function(){
 					method:method,
 					params: args
 			};
+			if (Object.keys(this.context).length) {
+				req.context = this.context;
+			}
 			
 			var xhr = new XMLHttpRequest;
 			xhr.open("POST", this.url);

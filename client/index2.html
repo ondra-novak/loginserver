@@ -3,40 +3,41 @@
 <head>
 <link href='https://fonts.googleapis.com/css?family=Maven Pro' rel='stylesheet'>
 <link href='styles.css' rel='stylesheet'>
+<meta charset="utf-8">
 <title>RPC Console</title>
 </head>
 <body onload="start()">
 <script type="text/javascript" src="rpc.js"></script>
+<div id="themeToggle">
 <div class="output" id="output"></div>
 <div class="panel">
 	<div class="label" id="label"> Command: </div>
 	<div class="input_outer">
 		<div class="quickhelp empty	" id="quickhelp"></div>
 		<div class="input" id="input" contenteditable="true"></div>
-		<div class="context_list" id="context_list"></div>
-	</div>
-	<div><button id="sendbutt">Send</button></div>
-	<div>
-	<div><button id="menubutt">Menu</button><div>
-	<menu>
-	<li>clear workspace</li>
+		<menu class="mainmenu" id="mainmenu">
+	<li id="clearWorkspace">Clear workspace</li>
 	<hr>
-	<li>Save context</li>
-	<li>Clear context</li>
-	<li>Restore context</li>
+	<li id="saveContext">Save context</li>
+	<li id="clearContext">Clear context</li>
+	<li id="restoreContext">Restore context</li>
 	<hr>
-	<li>Light theme</li>
-	<li>Dark theme</li>
+	<li id="toggleTheme">Toggle theme</li>	
 	</menu>
+		<div class="context_list" id="context_list"></div>
 
 	</div>
+	<div><button id="sendbutt" class="bottombutt">▶</button></div>
+	<div>
+	<div><button id="menubutt" class="bottombutt">☰</button><div>
 </div>
-
+</div>
 <script type="text/javascript">
 "use strict";
 function start() {
 	var rpc = new RpcClient("");
 	var input = window.input;
+	themeToggle.setAttribute("class",localStorage["theme"]);
 	
 	function setInput(z) {
         input.innerText = z;
@@ -73,9 +74,24 @@ function start() {
 		}
 		input.focus();
 	})
+	menubutt.addEventListener("click", function() {
+		mainmenu.classList.toggle("visible");
+		menubutt.classList.toggle("visible");
+	})
+	toggleTheme.addEventListener("click",function() {
+		themeToggle.classList.toggle("theme_light");
+		hideMainMenu();
+		localStorage["theme"] = themeToggle.className;
+	})
 	input.focus();
 }
 
+
+function hideMainMenu() {
+		mainmenu.classList.remove("visible");
+		menubutt.classList.remove("visible");
+
+}
 function setEndOfContenteditable(contentEditableElement)
 {
     var range,selection;
@@ -204,6 +220,8 @@ function addControls(rpc, root, cmd) {
     res.classList.add("pending");
 	var reloadButton = document.createElement("button");
 	reloadButton.classList.add("reload");
+	reloadButton.classList.add("bottombutt");
+	reloadButton.appendChild(document.createTextNode("⟳"));
     reloadButton.addEventListener("click", function(e) {  
     	e.stopPropagation();  	
     	res.classList.remove("result");
@@ -216,6 +234,8 @@ function addControls(rpc, root, cmd) {
     });
     var closeButton = document.createElement("button");    
     closeButton.classList.add("close");
+	closeButton.classList.add("bottombutt");
+	closeButton.appendChild(document.createTextNode("✖"));
     closeButton.addEventListener("click", function(e) {
     	e.stopPropagation();
     	var h = root.clientHeight;
