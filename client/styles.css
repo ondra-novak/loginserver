@@ -279,3 +279,10 @@ div.row {
 	text-shadow: 1px 1px 4px black;
 	cursor:pointer;
 }
+#sendbutt {
+	height:29px;
+	display:block;
+	color: yellow;
+	background-color: green;
+	border:1px double yellow;
+}

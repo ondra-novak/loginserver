@@ -15,6 +15,21 @@
 		<div class="input" id="input" contenteditable="true"></div>
 		<div class="context_list" id="context_list"></div>
 	</div>
+	<div><button id="sendbutt">Send</button></div>
+	<div>
+	<div><button id="menubutt">Menu</button><div>
+	<menu>
+	<li>clear workspace</li>
+	<hr>
+	<li>Save context</li>
+	<li>Clear context</li>
+	<li>Restore context</li>
+	<hr>
+	<li>Light theme</li>
+	<li>Dark theme</li>
+	</menu>
+
+	</div>
 </div>
 
 <script type="text/javascript">
@@ -43,6 +58,12 @@ function start() {
 		} else if (x == 27) {
 			hideHelp();
 		}
+	});
+	sendbutt.addEventListener("click",function() {
+		sendCommand(rpc, input.innerText).then(function(){			
+				input.focus();
+		});
+		input.innerText="";
 	});
 	label.addEventListener("click",function() {
 		if (isHelpShown()) { 
