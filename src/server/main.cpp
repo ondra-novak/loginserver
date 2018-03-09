@@ -34,11 +34,11 @@ static Value customRules = json::Value::fromString(R"json(
 {
 "Email":["explode","@",[[2],"Username","Domain"]],
 "Username":"[a-z-A-Z.0-9_+\"]",
-"Domain":["explode",".",[[2],"DomainPart","DomainPart","DomainPArt"]],
+"Domain":["explode",".",[[2],"DomainPart","DomainPart","DomainPart"]],
 "DomainPart":"[a-z-0-9]",
 "Token":["explode",".",[[2],"base64url","base64url"]],
 "Code":["explode","-",[[2],"digits","digits","digits"]],
-"Password":["minsize",8],
+"Password":["all","string",["minsize",8]],
 "PurposeItem":["all","[a-zA-Z0-9_]",["!","Refresh"]],
 "PurposeList":[[],"PurposeItem"],
 "Purpose":["Refresh","PurposeItem","PurposeList",[[2],"Refresh","PurposeList"]],
@@ -254,8 +254,10 @@ int main(int argc, char **argv) {
 
 	svc.enableRestart();
 
-	std::string client  = serverCfg.mandatory["web_client"].getPath();
-	server.addRPCPath("/RPC", client);
+	RpcHttpServer::Config cfg;
+	cfg.enableConsole = serverCfg["rpc_enableConsole"].getUIntDefVal(1) != 0;
+	cfg.maxReqSize = serverCfg["rpc_maxReqSize"].getUIntDefVal(0);
+	server.addRPCPath("/RPC", cfg);
 
 
 	server.add_listMethods("methods");

@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link href='https://fonts.googleapis.com/css?family=Maven Pro' rel='stylesheet'>
 <link href='styles.css' rel='stylesheet'>
 <meta charset="utf-8">
@@ -10,27 +11,25 @@
 <script type="text/javascript" src="rpc.js"></script>
 <div id="themeToggle">
 <div class="output" id="output"></div>
-<div class="panel">
+<div class="panel" id="panelcontrol">
 	<div class="label" id="label"> Command: </div>
 	<div class="input_outer">
 		<div class="quickhelp empty	" id="quickhelp"></div>
 		<div class="input" id="input" contenteditable="true"></div>
 		<menu class="mainmenu" id="mainmenu">
-	<li id="clearWorkspace">Clear workspace</li>
-	<hr>
-	<li id="saveContext">Save context</li>
-	<li id="clearContext">Clear context</li>
-	<li id="restoreContext">Restore context</li>
-	<hr>
-	<li id="toggleTheme">Toggle theme</li>	
-	</menu>
+			<li id="clearWorkspace">Clear workspace</li>
+			<li class="separator"></li>
+			<li id="saveContext">Save context</li>
+			<li id="clearContext">Clear context</li>
+			<li id="restoreContext">Restore context</li>
+		    <li class="separator"></li>
+			<li id="toggleTheme">Toggle theme</li>	
+		</menu>		
 		<div class="context_list" id="context_list"></div>
-
 	</div>
 	<div><button id="sendbutt" class="bottombutt">▶</button></div>
-	<div>
-	<div><button id="menubutt" class="bottombutt">☰</button><div>
-</div>
+	<div><button id="menubutt" class="bottombutt menubutt">☰</button></div>
+   </div>
 </div>
 <script type="text/javascript">
 "use strict";
@@ -43,6 +42,17 @@ function start() {
         input.innerText = z;
         input.focus();
         setEndOfContenteditable(input);
+     }
+     function restoreContextFn() {
+     	var x = localStorage["context"];
+     	if (x) {
+     		try {
+     			rpc.context = JSON.parse(x);
+     			updateContextView(rpc);
+     		} catch (e) {
+     			systemMessage("Failed to restore context","Error:"+e.toString(), true);
+     		}
+     	}
      }
 	input.addEventListener("keydown", function(ev) {
 		var x = ev.which || ev.keyCode;
@@ -73,24 +83,53 @@ function start() {
 			showHelp(rpc, "", setInput);
 		}
 		input.focus();
-	})
+	});
 	menubutt.addEventListener("click", function() {
-		mainmenu.classList.toggle("visible");
-		menubutt.classList.toggle("visible");
-	})
+		panelcontrol.classList.toggle("menu_visible");
+		setTimeout(scroll,500);
+	});
 	toggleTheme.addEventListener("click",function() {
 		themeToggle.classList.toggle("theme_light");
 		hideMainMenu();
 		localStorage["theme"] = themeToggle.className;
-	})
+	});
+	clearWorkspace.addEventListener("click",function() {
+		hideMainMenu();
+		if (confirm("Confirm clear workspace")) {
+			clearElement(output);
+		}
+	});
+	saveContext.addEventListener("click", function() {
+		localStorage["context"] = JSON.stringify(rpc.context);
+		systemMessage(saveContext.firstChild.nodeValue, "Context has been saved");
+		hideMainMenu();
+	});
+	clearContext.addEventListener("click", function() {
+		rpc.context = {};
+		updateContextView(rpc);		
+		hideMainMenu();
+	});
+	restoreContext.addEventListener("click", function() {
+		restoreContextFn();
+		hideMainMenu();
+	});
 	input.focus();
+	restoreContextFn();
 }
 
 
 function hideMainMenu() {
-		mainmenu.classList.remove("visible");
-		menubutt.classList.remove("visible");
+		panelcontrol.classList.remove("menu_visible");
 
+}
+
+function systemMessage(title, text, error) {
+	var root = document.createElement("div");
+	output.appendChild(root);
+	var z = addControls(null,root, {method:title});
+	z.innerHTML= text;
+	z.classList.remove("pending");
+	z.classList.add(error?"error":"result");
 }
 function setEndOfContenteditable(contentEditableElement)
 {
@@ -218,20 +257,24 @@ function addControls(rpc, root, cmd) {
     var res = document.createElement("div");
     res.classList.add("outdata");
     res.classList.add("pending");
-	var reloadButton = document.createElement("button");
-	reloadButton.classList.add("reload");
-	reloadButton.classList.add("bottombutt");
-	reloadButton.appendChild(document.createTextNode("⟳"));
-    reloadButton.addEventListener("click", function(e) {  
-    	e.stopPropagation();  	
-    	res.classList.remove("result");
-    	res.classList.remove("error");
-    	res.classList.add("pending");
-    	rpc.call2(cmd.method, cmd.args)
-    	   .then(function(x) {clearElement(res); return x;},
-    			   function(x) {clearElement(res); throw x;})
-    	   .then(outputResult.bind(null, res),outputError.bind(null,res));
-    });
+    var ln = outputCommand(root,cmd.method, cmd.args);
+    if (rpc) {
+		var reloadButton = document.createElement("button");
+		reloadButton.classList.add("reload");
+		reloadButton.classList.add("bottombutt");
+		reloadButton.appendChild(document.createTextNode("⟳"));
+		reloadButton.addEventListener("click", function(e) {  
+			e.stopPropagation();  	
+			res.classList.remove("result");
+			res.classList.remove("error");
+			res.classList.add("pending");
+			rpc.call2(cmd.method, cmd.args)
+			   .then(function(x) {clearElement(res); return x;},
+					   function(x) {clearElement(res); throw x;})
+			   .then(outputResult.bind(null, res),outputError.bind(null,res));
+		});
+    ln.appendChild(reloadButton);
+    }
     var closeButton = document.createElement("button");    
     closeButton.classList.add("close");
 	closeButton.classList.add("bottombutt");
@@ -251,8 +294,6 @@ function addControls(rpc, root, cmd) {
     		root.parentElement.removeChild(root);
     	},1000);
     });
-    var ln = outputCommand(root,cmd.method, cmd.args);
-    ln.appendChild(reloadButton);
     ln.appendChild(closeButton);
     root.appendChild(res);
     return res;
@@ -296,8 +337,8 @@ function outputCommand(elem, method, args) {
 	d.appendChild(c);
 	var p = document.createElement("span");
 	p.classList.add("params");
-	var strargs = JSON.stringify(args,null," ");
-	var strargs2 = JSON.stringify(args,null);
+	var strargs = args?JSON.stringify(args,null," "):"";
+	var strargs2 = args?JSON.stringify(args,null):"";
 	p.appendChild(document.createTextNode(strargs));
 	d.appendChild(p);
     elem.appendChild(d);   
@@ -320,8 +361,35 @@ function outputResult(d,result) {
 
 function outputError(d,result) {
 	d.classList.replace("pending","error");
+	var rejections = Array.isArray(result.rejections)?result.rejections:null;
+	if (rejections) {
+		delete result.rejections;
+	}
 	var json = formatJson(result);
 	d.appendChild(json);
+	if (rejections) {		
+		var table = document.createElement("json-object");
+		rejections.reverse().forEach(function(x) {
+			var row =document.createElement("json-pair");
+			table.appendChild(row);
+			var ref = "param";
+			x[0].forEach(function(y) {
+				if (typeof y == "number") ref = ref + "[" + y +"]";
+				else if (typeof y == "string") ref = ref + "." + y;
+			});
+			var t1 = document.createElement("json-key");
+			t1.appendChild(document.createTextNode(ref));
+			row.appendChild(t1);
+			row.appendChild(document.createTextNode("="));
+			var t2 = document.createElement("json-value");
+			t2.appendChild(formatJson(x[1]));
+			row.appendChild(t2);
+		});
+		var rejsect = document.createElement("rpc-rejections");
+		rejsect.appendChild(document.createTextNode("Required parameter(s):"));
+		d.appendChild(rejsect);
+        d.appendChild(table);
+	}
 }
 
 function formatJson(json) {	

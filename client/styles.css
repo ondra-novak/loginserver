@@ -1,11 +1,21 @@
 body {
 	background-color:#333;
 	font-family: 'Maven Pro';
-	font-size: 16px;
+	font-size: 0.4cm;
 	color: #CCC;
 	margin:0;
 }
-.panel {background-color: #444;padding: 5px;display:flex;position:sticky;bottom: 0px;overflow: hidden;}
+.panel {
+	background-color: #444;
+	padding: 5px;
+	display:flex;
+	position:sticky;
+	bottom: 0px;
+	overflow: hidden;
+	position: relative;
+	min-height:0px;
+	transition: all 0.5s;
+	}
 
 .input_outer {
 flex-grow: 1;
@@ -317,21 +327,46 @@ menu > li:active {
 	background-color: #844;
 }
 
-menu.mainmenu {
-	width:150px;
-	margin-left: auto;
-	margin-right: -50px;
-	float:right;
+.panel menu.mainmenu {
+	width:4cm;
+	right: 7px;
+	top: 0.9cm;
+
 	box-shadow: 2px 2px 4px black;
 	transition: all 0.5s;
 	max-height: 0px;
 	box-sizing: content-box;	
 	overflow: hidden;
 	padding: 0;	
+	position: absolute;
+
 }
-menu.mainmenu.visible {
-	max-height: 300px;
+.panel.menu_visible menu.mainmenu {
+	max-height: 4cm;
 	padding: 5px 0px;	
+}
+
+.panel.menu_visible {
+	min-height: 4cm;
+}
+
+.panel.menu_visible .menubutt {
+	background-color: #554;		
+}
+
+
+.separator {
+	margin: 0.1cm 0px 0.1cm 0px;
+	border-top: 1px solid black;
+
+}
+
+rpc-rejections {
+	display:block;
+	border-top: 1px solid;
+	margin-top: 5px;	
+	margin-bottom: 5px;	
+	font-weight: bold;
 }
 
 .theme_light{
@@ -380,11 +415,11 @@ menu.mainmenu.visible {
 }
 .theme_light json-boolean {
 	color: #4aa09f;
-	text-shadow: 2px 2px 4px black;
+	text-shadow: 2px 2px 4px #AAA;
 }
 .theme_light json-null {
 	color: #c34059;	
-	text-shadow: 2px 2px 4px black;
+	text-shadow: 2px 2px 4px #AAA;
 }
 .theme_light .outdata.result {
 	background-color: #dde8df;	
@@ -422,4 +457,8 @@ menu.mainmenu.visible {
 }
 .theme_light .outdata.pending:before,.theme_light  .quickhelp.pending:before {
 	filter: brightness(0);
+}
+
+.theme_light .panel.menu_visible .menubutt {
+	background-color: #e9e9cd;		
 }
